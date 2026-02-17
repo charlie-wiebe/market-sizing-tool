@@ -132,15 +132,49 @@
                     </button>
                 </div>
 
+                <!-- Search Mode -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="gauge" class="w-5 h-5"></i>
+                        Search Mode
+                    </h2>
+                    
+                    <div class="space-y-3">
+                        <label class="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                            <input type="radio" name="search_mode" value="quick_tam" checked class="mt-1">
+                            <div>
+                                <span class="font-medium">Quick TAM Estimate</span>
+                                <span id="quick_credits" class="ml-2 text-sm text-green-600 font-semibold">~2 credits</span>
+                                <p class="text-sm text-gray-600 mt-1">
+                                    Get aggregate totals instantly. Returns total company count and total person counts across all matching companies.
+                                    <span class="text-gray-400 cursor-help" title="Uses company filters in person search to get totals in a single query per persona definition.">ⓘ</span>
+                                </p>
+                            </div>
+                        </label>
+                        
+                        <label class="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                            <input type="radio" name="search_mode" value="detailed" class="mt-1">
+                            <div>
+                                <span class="font-medium">Detailed Breakdown</span>
+                                <span id="detailed_credits" class="ml-2 text-sm text-orange-600 font-semibold">~30,000 credits</span>
+                                <p class="text-sm text-gray-600 mt-1">
+                                    Get per-company person counts. Searches each company individually for detailed breakdown, stored in database.
+                                    <span class="text-gray-400 cursor-help" title="Paginates through all companies, then runs a person search for each company. Much slower and uses more credits.">ⓘ</span>
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
                 <!-- Actions -->
                 <div class="flex gap-4">
                     <button onclick="runPreview()" class="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 flex items-center gap-2">
                         <i data-lucide="eye" class="w-5 h-5"></i>
-                        Preview (1-2 credits)
+                        Preview
                     </button>
                     <button onclick="startJob()" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 flex items-center gap-2">
                         <i data-lucide="play" class="w-5 h-5"></i>
-                        Run Full Search
+                        Run Search
                     </button>
                 </div>
             </div>
@@ -414,8 +448,25 @@
                     html += '</ul></div>';
                 }
                 
+                // Show aggregate person counts
+                if (data.aggregate_person_counts) {
+                    html += '<div class="border-t pt-3 mt-3"><p class="text-sm font-medium mb-2">Aggregate Person Counts (Quick TAM):</p><ul class="text-sm space-y-1">';
+                    for (const [name, count] of Object.entries(data.aggregate_person_counts)) {
+                        if (!name.includes('_sample_countries')) {
+                            html += `<li class="text-gray-700">• <strong>${name}:</strong> ${count.toLocaleString()} people</li>`;
+                        }
+                    }
+                    html += '</ul></div>';
+                }
+                
                 html += '</div>';
                 content.innerHTML = html;
+                
+                // Update credit estimates in mode selector
+                if (data.credits) {
+                    document.getElementById('quick_credits').textContent = `~${data.credits.quick_tam.toLocaleString()} credits`;
+                    document.getElementById('detailed_credits').textContent = `~${data.credits.detailed.toLocaleString()} credits`;
+                }
                 
                 // Save for use in startJob
                 lastPreviewData = data;
@@ -426,6 +477,10 @@
         }
         
         let lastPreviewData = null;
+        
+        function getSelectedMode() {
+            return document.querySelector('input[name="search_mode"]:checked').value;
+        }
         
         async function startJob() {
             // First run a preview to check limits
@@ -473,6 +528,7 @@
                     }
                 }
                 
+                const mode = getSelectedMode();
                 const jobName = prompt('Enter job name:', `Market Sizing ${new Date().toLocaleDateString()}`);
                 if (!jobName) return;
                 
@@ -482,7 +538,8 @@
                     body: JSON.stringify({
                         name: jobName,
                         company_filters: companyFilters,
-                        person_filters: personFilters
+                        person_filters: personFilters,
+                        mode: mode
                     })
                 });
                 

@@ -23,6 +23,8 @@ class Job(db.Model):
     company_filters = db.Column(db.JSON)
     person_filters = db.Column(db.JSON)  # List of person search configs
     query_fingerprint = db.Column(db.String(32), index=True)  # Hash of filters for duplicate detection
+    mode = db.Column(db.String(20), default='quick_tam')  # 'quick_tam' or 'detailed'
+    aggregate_results = db.Column(db.JSON)  # For quick_tam mode: {query_name: count}
     total_companies = db.Column(db.Integer, default=0)
     processed_companies = db.Column(db.Integer, default=0)
     estimated_credits = db.Column(db.Integer, default=0)
@@ -39,8 +41,10 @@ class Job(db.Model):
             'id': self.id,
             'name': self.name,
             'status': self.status,
+            'mode': self.mode,
             'company_filters': self.company_filters,
             'person_filters': self.person_filters,
+            'aggregate_results': self.aggregate_results,
             'total_companies': self.total_companies,
             'processed_companies': self.processed_companies,
             'estimated_credits': self.estimated_credits,

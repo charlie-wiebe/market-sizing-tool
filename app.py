@@ -125,10 +125,39 @@ def preview():
     company_pages = (total_companies + 24) // 25
     person_queries = len(person_filters)
     
-    estimated_credits = company_pages + (total_companies * person_queries)
+    # Calculate credits for both modes
+    detailed_credits = company_pages + (total_companies * person_queries)
+    quick_credits = 1 + person_queries  # 1 company search + N person searches
     
     # Check if over 25k limit
     exceeds_limit = total_companies > 25000
+    
+    # Aggregate person counts (Quick TAM mode)
+    aggregate_person_counts = {}
+    for person_config in person_filters:
+        query_name = person_config.get("name", "Unnamed Query")
+        p_filters = dict(person_config.get("filters", {}))
+        
+        # Merge company filters into person search
+        p_filters.update(company_filters)
+        
+        p_response = client.search_people(p_filters, page=1)
+        
+        if not client.is_error(p_response):
+            p_pagination = client.get_pagination(p_response)
+            aggregate_person_counts[query_name] = p_pagination["total_count"]
+            
+            # Extract country breakdown from results
+            people = client.extract_people(p_response)
+            country_counts = {}
+            for person in people:
+                if isinstance(person, dict):
+                    country = person.get("location", {}).get("country") if isinstance(person.get("location"), dict) else None
+                    if country:
+                        country_counts[country] = country_counts.get(country, 0) + 1
+            aggregate_person_counts[f"{query_name}_sample_countries"] = country_counts
+        else:
+            aggregate_person_counts[query_name] = 0
     
     return jsonify({
         "error": False,
@@ -143,7 +172,12 @@ def preview():
         },
         "exceeds_limit": exceeds_limit,
         "existing_data": existing_job_info,
-        "query_fingerprint": fingerprint
+        "query_fingerprint": fingerprint,
+        "aggregate_person_counts": aggregate_person_counts,
+        "credits": {
+            "quick_tam": quick_credits,
+            "detailed": detailed_credits
+        }
     })
 
 
@@ -153,6 +187,7 @@ def create_job():
     
     company_filters = data.get("company_filters", {})
     person_filters = data.get("person_filters", [])
+    mode = data.get("mode", "quick_tam")  # Default to quick_tam
     fingerprint = generate_query_fingerprint(company_filters, person_filters)
     
     job = Job(
@@ -160,15 +195,74 @@ def create_job():
         status="pending",
         company_filters=company_filters,
         person_filters=person_filters,
+        mode=mode,
         query_fingerprint=fingerprint
     )
     db.session.add(job)
     db.session.commit()
     
+    # Quick TAM mode runs synchronously (very fast)
+    if mode == "quick_tam":
+        run_quick_tam_job(job)
+        return jsonify(job.to_dict()), 201
+    
+    # Detailed mode runs async
     job_runner = start_job_async(job.id, app)
     running_jobs[job.id] = job_runner
     
     return jsonify(job.to_dict()), 201
+
+
+def run_quick_tam_job(job):
+    """Run Quick TAM job synchronously - just aggregate counts."""
+    job.status = 'running'
+    job.started_at = datetime.utcnow()
+    db.session.commit()
+    
+    try:
+        # Get company count
+        response = client.search_companies(job.company_filters, page=1)
+        
+        if client.is_error(response):
+            job.status = 'failed'
+            job.error_message = f"Company search failed: {client.get_error_code(response)}"
+            job.completed_at = datetime.utcnow()
+            db.session.commit()
+            return
+        
+        pagination = client.get_pagination(response)
+        job.total_companies = pagination["total_count"]
+        credits_used = 1
+        
+        # Get aggregate person counts
+        aggregate_results = {}
+        for person_config in (job.person_filters or []):
+            query_name = person_config.get("name", "Unnamed Query")
+            p_filters = dict(person_config.get("filters", {}))
+            
+            # Merge company filters into person search
+            p_filters.update(job.company_filters)
+            
+            p_response = client.search_people(p_filters, page=1)
+            credits_used += 1
+            
+            if not client.is_error(p_response):
+                p_pagination = client.get_pagination(p_response)
+                aggregate_results[query_name] = p_pagination["total_count"]
+            else:
+                aggregate_results[query_name] = 0
+        
+        job.aggregate_results = aggregate_results
+        job.actual_credits = credits_used
+        job.status = 'completed'
+        job.completed_at = datetime.utcnow()
+        
+    except Exception as e:
+        job.status = 'failed'
+        job.error_message = str(e)
+        job.completed_at = datetime.utcnow()
+    
+    db.session.commit()
 
 
 @app.route("/api/jobs/<int:job_id>")

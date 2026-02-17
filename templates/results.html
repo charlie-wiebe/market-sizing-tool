@@ -74,8 +74,23 @@
             </button>
         </div>
 
-        <!-- Results Table -->
-        <div class="bg-white rounded-lg shadow overflow-hidden">
+        <!-- Quick TAM Summary (for quick_tam mode) -->
+        <div id="quick_tam_summary" class="bg-white rounded-lg shadow p-6 mb-6 hidden">
+            <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <i data-lucide="zap" class="w-5 h-5 text-yellow-500"></i>
+                Quick TAM Estimate
+            </h2>
+            <p class="text-sm text-gray-600 mb-4">
+                This is an aggregate estimate using company filters in person search. 
+                For per-company breakdowns, run a new search in "Detailed Breakdown" mode.
+            </p>
+            <div id="quick_tam_results" class="space-y-2">
+                <!-- Filled by JS -->
+            </div>
+        </div>
+
+        <!-- Results Table (for detailed mode) -->
+        <div id="detailed_results" class="bg-white rounded-lg shadow overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -147,63 +162,107 @@
                         `${data.job.processed_companies} / ${data.job.total_companies} companies`;
                 }
                 
-                // Update summary cards
-                document.getElementById('total_companies').textContent = data.aggregates.total_companies.toLocaleString();
-                document.getElementById('credits_used').textContent = (data.job.actual_credits || 0).toLocaleString();
+                // Check if quick_tam mode
+                const isQuickTam = data.job.mode === 'quick_tam';
+                const quickTamSummary = document.getElementById('quick_tam_summary');
+                const detailedResults = document.getElementById('detailed_results');
                 
-                // Person count cards
-                const personCountsCards = document.getElementById('person_counts_cards');
-                personCountsCards.innerHTML = '';
-                personQueryNames = Object.keys(data.aggregates.person_counts || {});
-                
-                personQueryNames.forEach(name => {
-                    const count = data.aggregates.person_counts[name] || 0;
-                    personCountsCards.innerHTML += `
-                        <div class="bg-white rounded-lg shadow p-6">
-                            <p class="text-sm text-gray-500">${name}</p>
-                            <p class="text-3xl font-bold text-blue-600">${count.toLocaleString()}</p>
-                        </div>
-                    `;
-                });
-                
-                // Update table headers
-                const headersContainer = document.getElementById('person_count_headers');
-                headersContainer.innerHTML = '';
-                personQueryNames.forEach(name => {
-                    const th = document.createElement('th');
-                    th.className = 'px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase';
-                    th.textContent = name;
-                    headersContainer.appendChild(th);
-                });
-                
-                // Update table body
-                const tbody = document.getElementById('results_body');
-                if (data.companies.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="' + (4 + personQueryNames.length) + '" class="px-4 py-8 text-center text-gray-500">No results yet</td></tr>';
+                if (isQuickTam) {
+                    // Show Quick TAM summary, hide detailed table
+                    quickTamSummary.classList.remove('hidden');
+                    detailedResults.classList.add('hidden');
+                    
+                    // Update summary cards with aggregate results
+                    document.getElementById('total_companies').textContent = (data.job.total_companies || 0).toLocaleString();
+                    document.getElementById('credits_used').textContent = (data.job.actual_credits || 0).toLocaleString();
+                    
+                    // Person count cards from aggregate_results
+                    const personCountsCards = document.getElementById('person_counts_cards');
+                    personCountsCards.innerHTML = '';
+                    const aggregateResults = data.job.aggregate_results || {};
+                    
+                    for (const [name, count] of Object.entries(aggregateResults)) {
+                        personCountsCards.innerHTML += `
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <p class="text-sm text-gray-500">${name}</p>
+                                <p class="text-3xl font-bold text-blue-600">${count.toLocaleString()}</p>
+                            </div>
+                        `;
+                    }
+                    
+                    // Quick TAM detailed results
+                    const quickTamResults = document.getElementById('quick_tam_results');
+                    let html = '<div class="grid grid-cols-2 gap-4">';
+                    html += `<div class="p-4 bg-gray-50 rounded"><span class="text-gray-600">Total Companies</span><br><span class="text-2xl font-bold">${(data.job.total_companies || 0).toLocaleString()}</span></div>`;
+                    for (const [name, count] of Object.entries(aggregateResults)) {
+                        html += `<div class="p-4 bg-blue-50 rounded"><span class="text-gray-600">${name}</span><br><span class="text-2xl font-bold text-blue-600">${count.toLocaleString()}</span></div>`;
+                    }
+                    html += '</div>';
+                    quickTamResults.innerHTML = html;
+                    
                 } else {
-                    tbody.innerHTML = data.companies.map(c => `
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-4 py-3">
-                                <div class="font-medium text-gray-900">${c.name || 'N/A'}</div>
-                                <div class="text-xs text-gray-500">${c.domain || c.website || ''}</div>
-                            </td>
-                            <td class="px-4 py-3 text-sm text-gray-700">${c.industry || 'N/A'}</td>
-                            <td class="px-4 py-3 text-sm text-gray-700">${c.headcount || 'N/A'}</td>
-                            <td class="px-4 py-3 text-sm text-gray-700">${[c.location_city, c.location_country].filter(Boolean).join(', ') || 'N/A'}</td>
-                            ${personQueryNames.map(name => `
-                                <td class="px-4 py-3 text-sm font-medium text-blue-600">${c.person_counts?.[name] ?? '-'}</td>
-                            `).join('')}
-                        </tr>
-                    `).join('');
+                    // Detailed mode - show table
+                    quickTamSummary.classList.add('hidden');
+                    detailedResults.classList.remove('hidden');
+                    
+                    // Update summary cards
+                    document.getElementById('total_companies').textContent = data.aggregates.total_companies.toLocaleString();
+                    document.getElementById('credits_used').textContent = (data.job.actual_credits || 0).toLocaleString();
+                    
+                    // Person count cards
+                    const personCountsCards = document.getElementById('person_counts_cards');
+                    personCountsCards.innerHTML = '';
+                    personQueryNames = Object.keys(data.aggregates.person_counts || {});
+                    
+                    personQueryNames.forEach(name => {
+                        const count = data.aggregates.person_counts[name] || 0;
+                        personCountsCards.innerHTML += `
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <p class="text-sm text-gray-500">${name}</p>
+                                <p class="text-3xl font-bold text-blue-600">${count.toLocaleString()}</p>
+                            </div>
+                        `;
+                    });
+                    
+                    // Update table headers
+                    const headersContainer = document.getElementById('person_count_headers');
+                    headersContainer.innerHTML = '';
+                    personQueryNames.forEach(name => {
+                        const th = document.createElement('th');
+                        th.className = 'px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase';
+                        th.textContent = name;
+                        headersContainer.appendChild(th);
+                    });
+                    
+                    // Update table body
+                    const tbody = document.getElementById('results_body');
+                    if (data.companies.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="' + (4 + personQueryNames.length) + '" class="px-4 py-8 text-center text-gray-500">No results yet</td></tr>';
+                    } else {
+                        tbody.innerHTML = data.companies.map(c => `
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3">
+                                    <div class="font-medium text-gray-900">${c.name || 'N/A'}</div>
+                                    <div class="text-xs text-gray-500">${c.domain || c.website || ''}</div>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-700">${c.industry || 'N/A'}</td>
+                                <td class="px-4 py-3 text-sm text-gray-700">${c.headcount || 'N/A'}</td>
+                                <td class="px-4 py-3 text-sm text-gray-700">${[c.location_city, c.location_country].filter(Boolean).join(', ') || 'N/A'}</td>
+                                ${personQueryNames.map(name => `
+                                    <td class="px-4 py-3 text-sm font-medium text-blue-600">${c.person_counts?.[name] ?? '-'}</td>
+                                `).join('')}
+                            </tr>
+                        `).join('');
+                    }
+                    
+                    // Update pagination
+                    totalPages = data.pagination.pages;
+                    document.getElementById('showing_start').textContent = ((currentPage - 1) * 50) + 1;
+                    document.getElementById('showing_end').textContent = Math.min(currentPage * 50, data.pagination.total);
+                    document.getElementById('total_results').textContent = data.pagination.total;
+                    document.getElementById('prev_btn').disabled = currentPage <= 1;
+                    document.getElementById('next_btn').disabled = currentPage >= totalPages;
                 }
-                
-                // Update pagination
-                totalPages = data.pagination.pages;
-                document.getElementById('showing_start').textContent = ((currentPage - 1) * 50) + 1;
-                document.getElementById('showing_end').textContent = Math.min(currentPage * 50, data.pagination.total);
-                document.getElementById('total_results').textContent = data.pagination.total;
-                document.getElementById('prev_btn').disabled = currentPage <= 1;
-                document.getElementById('next_btn').disabled = currentPage >= totalPages;
                 
             } catch (err) {
                 console.error('Error loading results:', err);
