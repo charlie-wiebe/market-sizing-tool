@@ -4,13 +4,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def get_database_url():
-    # Check for persistent disk on Render (mounted at /data)
-    if os.path.exists("/data"):
-        return "sqlite:////data/market_sizing.db"
+    url = os.getenv("DATABASE_URL")
     
-    # Local development - use local SQLite file
-    basedir = os.path.abspath(os.path.dirname(__file__))
-    return f"sqlite:///{os.path.join(basedir, 'market_sizing.db')}"
+    # Default to SQLite for local dev if no DATABASE_URL set
+    if not url:
+        basedir = os.path.abspath(os.path.dirname(__file__))
+        return f"sqlite:///{os.path.join(basedir, 'market_sizing.db')}"
+    
+    # Handle Render's DATABASE_URL which uses postgres:// scheme
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif url.startswith("postgresql://") and "+psycopg" not in url:
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return url
 
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-prod")
