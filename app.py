@@ -17,6 +17,18 @@ db.init_app(app)
 
 with app.app_context():
     db.create_all()
+    
+    # Run migrations for new columns
+    from sqlalchemy import text
+    with db.engine.connect() as conn:
+        # Add missing columns if they don't exist
+        try:
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS query_fingerprint VARCHAR(32)"))
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'quick_tam'"))
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS aggregate_results JSON"))
+            conn.commit()
+        except Exception as e:
+            print(f"Migration note: {e}")
 
 client = ProspeoClient()
 segmenter = QuerySegmenter(client)
