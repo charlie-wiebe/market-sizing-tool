@@ -177,7 +177,7 @@ def preview():
         "company_pages": company_pages,
         "sample_companies": sample_companies,
         "person_preview": person_preview,
-        "estimated_credits": estimated_credits,
+        "estimated_credits": detailed_credits,
         "credit_breakdown": {
             "company_search": company_pages,
             "person_searches": total_companies * person_queries
