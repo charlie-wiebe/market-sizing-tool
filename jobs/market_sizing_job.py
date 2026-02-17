@@ -89,12 +89,44 @@ class MarketSizingJob:
                 db.session.commit()
 
     def _save_company(self, job_id, data):
+        """Upsert company - update existing by prospeo_company_id or create new."""
         domain = data.get("domain") or data.get("website") or ""
         root = registrable_root_domain(domain)
+        prospeo_id = data.get("company_id")
         
+        # Check for existing company with same prospeo_company_id in this job
+        existing = None
+        if prospeo_id:
+            existing = Company.query.filter_by(
+                job_id=job_id, 
+                prospeo_company_id=prospeo_id
+            ).first()
+        
+        if existing:
+            # Update existing record with latest data
+            existing.name = data.get("name") or existing.name
+            existing.domain = data.get("domain") or existing.domain
+            existing.website = data.get("website") or existing.website
+            existing.root_domain = root or existing.root_domain
+            existing.industry = data.get("industry") or existing.industry
+            existing.headcount = data.get("headcount") or existing.headcount
+            existing.headcount_by_department = data.get("headcount_by_department") or existing.headcount_by_department
+            existing.location_country = data.get("location", {}).get("country") if isinstance(data.get("location"), dict) else existing.location_country
+            existing.location_city = data.get("location", {}).get("city") if isinstance(data.get("location"), dict) else existing.location_city
+            existing.location_state = data.get("location", {}).get("state") if isinstance(data.get("location"), dict) else existing.location_state
+            existing.founded_year = data.get("founded") or existing.founded_year
+            existing.funding_stage = data.get("funding_stage") or existing.funding_stage
+            existing.revenue_range = data.get("revenue") or existing.revenue_range
+            existing.b2b = data.get("b2b") if data.get("b2b") is not None else existing.b2b
+            existing.linkedin_url = data.get("linkedin_url") or existing.linkedin_url
+            existing.created_at = datetime.utcnow()  # Update timestamp
+            db.session.flush()
+            return existing
+        
+        # Create new company
         company = Company(
             job_id=job_id,
-            prospeo_company_id=data.get("company_id"),
+            prospeo_company_id=prospeo_id,
             name=data.get("name"),
             domain=data.get("domain"),
             website=data.get("website"),

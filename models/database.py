@@ -1,7 +1,18 @@
+import hashlib
+import json
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
+
+
+def generate_query_fingerprint(company_filters, person_filters):
+    """Generate a hash fingerprint for a query configuration."""
+    normalized = json.dumps({
+        'company': company_filters,
+        'person': person_filters
+    }, sort_keys=True)
+    return hashlib.sha256(normalized.encode()).hexdigest()[:32]
 
 class Job(db.Model):
     __tablename__ = 'jobs'
@@ -11,6 +22,7 @@ class Job(db.Model):
     status = db.Column(db.String(50), default='pending')  # pending, running, completed, failed
     company_filters = db.Column(db.JSON)
     person_filters = db.Column(db.JSON)  # List of person search configs
+    query_fingerprint = db.Column(db.String(32), index=True)  # Hash of filters for duplicate detection
     total_companies = db.Column(db.Integer, default=0)
     processed_companies = db.Column(db.Integer, default=0)
     estimated_credits = db.Column(db.Integer, default=0)
@@ -46,7 +58,7 @@ class Company(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     job_id = db.Column(db.Integer, db.ForeignKey('jobs.id'), nullable=False)
-    prospeo_company_id = db.Column(db.String(100))
+    prospeo_company_id = db.Column(db.String(100), index=True)  # Indexed for upsert lookups
     name = db.Column(db.String(500))
     domain = db.Column(db.String(255))
     website = db.Column(db.String(500))

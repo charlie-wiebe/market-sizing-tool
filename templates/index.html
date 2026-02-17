@@ -345,8 +345,38 @@
                     return;
                 }
                 
-                let html = `
-                    <div class="space-y-4">
+                let html = `<div class="space-y-4">`;
+                
+                // Warning for >25k results
+                if (data.exceeds_limit) {
+                    html += `
+                        <div class="bg-red-50 border border-red-200 p-3 rounded">
+                            <p class="text-sm font-semibold text-red-800 flex items-center gap-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                </svg>
+                                Exceeds 25,000 limit
+                            </p>
+                            <p class="text-xs text-red-700 mt-1">This query returns more results than Prospeo's pagination limit. Consider adding more filters to narrow results.</p>
+                        </div>
+                    `;
+                }
+                
+                // Existing data notice
+                if (data.existing_data) {
+                    html += `
+                        <div class="bg-green-50 border border-green-200 p-3 rounded">
+                            <p class="text-sm font-semibold text-green-800">Existing data found!</p>
+                            <p class="text-xs text-green-700 mt-1">
+                                This query was run before: <strong>${data.existing_data.job_name}</strong><br>
+                                Found <strong>${data.existing_data.company_count.toLocaleString()}</strong> companies in database.
+                                <a href="/results/${data.existing_data.job_id}" class="underline">View results →</a>
+                            </p>
+                        </div>
+                    `;
+                }
+                
+                html += `
                         <div class="bg-blue-50 p-3 rounded">
                             <p class="text-2xl font-bold text-blue-900">${data.company_count.toLocaleString()}</p>
                             <p class="text-sm text-blue-700">companies found</p>
@@ -387,23 +417,72 @@
                 html += '</div>';
                 content.innerHTML = html;
                 
+                // Save for use in startJob
+                lastPreviewData = data;
+                
             } catch (err) {
                 content.innerHTML = `<p class="text-red-600">Error: ${err.message}</p>`;
             }
         }
         
+        let lastPreviewData = null;
+        
         async function startJob() {
-            const jobName = prompt('Enter job name:', `Market Sizing ${new Date().toLocaleDateString()}`);
-            if (!jobName) return;
+            // First run a preview to check limits
+            const companyFilters = getCompanyFilters();
+            const personFilters = getPersonFilters();
             
             try {
+                // Quick check if we have recent preview data, otherwise fetch
+                if (!lastPreviewData) {
+                    const previewResponse = await fetch('/api/preview', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            company_filters: companyFilters,
+                            person_filters: personFilters
+                        })
+                    });
+                    lastPreviewData = await previewResponse.json();
+                }
+                
+                // Check for >25k warning
+                if (lastPreviewData.exceeds_limit) {
+                    const confirmed = confirm(
+                        `⚠️ WARNING: This query returns ${lastPreviewData.company_count.toLocaleString()} companies, ` +
+                        `which exceeds Prospeo's 25,000 result limit.\n\n` +
+                        `Only the first 25,000 companies will be retrieved.\n` +
+                        `Estimated credits: ${lastPreviewData.estimated_credits.toLocaleString()}\n\n` +
+                        `Do you want to proceed anyway?`
+                    );
+                    if (!confirmed) return;
+                }
+                
+                // Check for existing data
+                if (lastPreviewData.existing_data) {
+                    const useExisting = confirm(
+                        `This query was already run before!\n\n` +
+                        `Job: "${lastPreviewData.existing_data.job_name}"\n` +
+                        `Companies found: ${lastPreviewData.existing_data.company_count.toLocaleString()}\n\n` +
+                        `Click OK to run a new search (uses credits)\n` +
+                        `Click Cancel to view existing results instead`
+                    );
+                    if (!useExisting) {
+                        window.location.href = `/results/${lastPreviewData.existing_data.job_id}`;
+                        return;
+                    }
+                }
+                
+                const jobName = prompt('Enter job name:', `Market Sizing ${new Date().toLocaleDateString()}`);
+                if (!jobName) return;
+                
                 const response = await fetch('/api/jobs', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         name: jobName,
-                        company_filters: getCompanyFilters(),
-                        person_filters: getPersonFilters()
+                        company_filters: companyFilters,
+                        person_filters: personFilters
                     })
                 });
                 

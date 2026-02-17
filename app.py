@@ -5,7 +5,7 @@ import csv
 import io
 
 from config import Config
-from models.database import db, Job, Company, PersonCount
+from models.database import db, Job, Company, PersonCount, generate_query_fingerprint
 from services.prospeo_client import ProspeoClient
 from services.query_segmenter import QuerySegmenter
 from services.domain_utils import registrable_root_domain
@@ -40,6 +40,26 @@ def preview():
     data = request.json
     company_filters = data.get("company_filters", {})
     person_filters = data.get("person_filters", [])
+    
+    # Generate fingerprint to check for existing data
+    fingerprint = generate_query_fingerprint(company_filters, person_filters)
+    
+    # Check for existing jobs with same query
+    existing_jobs = Job.query.filter_by(query_fingerprint=fingerprint).filter(
+        Job.status.in_(['completed', 'running'])
+    ).order_by(Job.created_at.desc()).all()
+    
+    existing_company_count = 0
+    existing_job_info = None
+    if existing_jobs:
+        latest_job = existing_jobs[0]
+        existing_company_count = Company.query.filter_by(job_id=latest_job.id).count()
+        existing_job_info = {
+            'job_id': latest_job.id,
+            'job_name': latest_job.name,
+            'company_count': existing_company_count,
+            'created_at': latest_job.created_at.isoformat() if latest_job.created_at else None
+        }
     
     response = client.search_companies(company_filters, page=1)
     
@@ -107,6 +127,9 @@ def preview():
     
     estimated_credits = company_pages + (total_companies * person_queries)
     
+    # Check if over 25k limit
+    exceeds_limit = total_companies > 25000
+    
     return jsonify({
         "error": False,
         "company_count": total_companies,
@@ -117,7 +140,10 @@ def preview():
         "credit_breakdown": {
             "company_search": company_pages,
             "person_searches": total_companies * person_queries
-        }
+        },
+        "exceeds_limit": exceeds_limit,
+        "existing_data": existing_job_info,
+        "query_fingerprint": fingerprint
     })
 
 
@@ -125,11 +151,16 @@ def preview():
 def create_job():
     data = request.json
     
+    company_filters = data.get("company_filters", {})
+    person_filters = data.get("person_filters", [])
+    fingerprint = generate_query_fingerprint(company_filters, person_filters)
+    
     job = Job(
         name=data.get("name", f"Job {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"),
         status="pending",
-        company_filters=data.get("company_filters", {}),
-        person_filters=data.get("person_filters", [])
+        company_filters=company_filters,
+        person_filters=person_filters,
+        query_fingerprint=fingerprint
     )
     db.session.add(job)
     db.session.commit()
