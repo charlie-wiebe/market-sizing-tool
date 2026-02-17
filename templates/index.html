@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Sizing Tool - Prospeo API</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Market Sizing Tool</h1>
+            <p class="text-gray-600 mt-2">Build Prospeo API queries to size your TAM</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Query Builder -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Company Filters -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="building-2" class="w-5 h-5"></i>
+                        Company Filters
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Location (Countries)</label>
+                            <select id="company_location" multiple class="w-full border rounded-md p-2 h-24">
+                                <option value="United States" selected>United States</option>
+                                <option value="United Kingdom" selected>United Kingdom</option>
+                                <option value="Canada" selected>Canada</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">B2B Only</label>
+                            <select id="company_b2b" class="w-full border rounded-md p-2">
+                                <option value="true" selected>Yes</option>
+                                <option value="false">No</option>
+                                <option value="">Any</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Employee Range</label>
+                            <select id="company_headcount" multiple class="w-full border rounded-md p-2 h-32">
+                                <option value="1-10">1-10</option>
+                                <option value="11-20">11-20</option>
+                                <option value="21-50" selected>21-50</option>
+                                <option value="51-100" selected>51-100</option>
+                                <option value="101-200" selected>101-200</option>
+                                <option value="201-500" selected>201-500</option>
+                                <option value="501-1000" selected>501-1000</option>
+                                <option value="1001-2000" selected>1001-2000</option>
+                                <option value="2001-5000" selected>2001-5000</option>
+                                <option value="5001-10000" selected>5001-10000</option>
+                                <option value="10000+" selected>10000+</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Industry (optional)</label>
+                            <input type="text" id="company_industry" placeholder="e.g., Software Development" class="w-full border rounded-md p-2">
+                            <p class="text-xs text-gray-500 mt-1">Comma-separated list</p>
+                        </div>
+                        
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Min Sales Development Headcount</label>
+                            <input type="number" id="min_sdr_headcount" value="2" min="1" class="w-32 border rounded-md p-2">
+                        </div>
+                        
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Keywords (optional)</label>
+                            <input type="text" id="company_keywords" placeholder="e.g., saas, enterprise" class="w-full border rounded-md p-2">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Person Filters -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="users" class="w-5 h-5"></i>
+                        Person Search Definitions
+                    </h2>
+                    
+                    <div id="person_filters_container" class="space-y-4">
+                        <!-- SDR Query (default) -->
+                        <div class="border rounded-lg p-4 person-filter-block" data-index="0">
+                            <div class="flex justify-between items-center mb-3">
+                                <input type="text" class="person-query-name font-medium border-b border-transparent hover:border-gray-300 focus:border-blue-500 outline-none" value="SDR Count">
+                                <button type="button" onclick="removePersonFilter(0)" class="text-red-500 hover:text-red-700">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Department</label>
+                                    <select class="person-department w-full border rounded p-1.5 text-sm" multiple>
+                                        <option value="Sales Development" selected>Sales Development</option>
+                                        <option value="Sales">Sales</option>
+                                        <option value="Marketing">Marketing</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Seniority</label>
+                                    <select class="person-seniority w-full border rounded p-1.5 text-sm" multiple>
+                                        <option value="Entry" selected>Entry</option>
+                                        <option value="Senior" selected>Senior</option>
+                                        <option value="Intern" selected>Intern</option>
+                                        <option value="Manager">Manager</option>
+                                        <option value="Director">Director</option>
+                                        <option value="Vice President">Vice President</option>
+                                        <option value="C-Suite">C-Suite</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="md:col-span-2">
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Job Title Contains (optional)</label>
+                                    <input type="text" class="person-title w-full border rounded p-1.5 text-sm" placeholder="e.g., SDR, BDR">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button type="button" onclick="addPersonFilter()" class="mt-4 text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        Add Person Search
+                    </button>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex gap-4">
+                    <button onclick="runPreview()" class="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 flex items-center gap-2">
+                        <i data-lucide="eye" class="w-5 h-5"></i>
+                        Preview (1-2 credits)
+                    </button>
+                    <button onclick="startJob()" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 flex items-center gap-2">
+                        <i data-lucide="play" class="w-5 h-5"></i>
+                        Run Full Search
+                    </button>
+                </div>
+            </div>
+
+            <!-- Preview & Jobs Panel -->
+            <div class="space-y-6">
+                <!-- Preview Results -->
+                <div id="preview_panel" class="bg-white rounded-lg shadow p-6 hidden">
+                    <h3 class="font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="search" class="w-5 h-5"></i>
+                        Preview Results
+                    </h3>
+                    <div id="preview_content"></div>
+                </div>
+
+                <!-- Recent Jobs -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="history" class="w-5 h-5"></i>
+                        Recent Jobs
+                    </h3>
+                    <div id="jobs_list" class="space-y-3">
+                        {% for job in jobs %}
+                        <a href="/results/{{ job.id }}" class="block border rounded-lg p-3 hover:bg-gray-50">
+                            <div class="flex justify-between items-center">
+                                <span class="font-medium text-sm">{{ job.name }}</span>
+                                <span class="text-xs px-2 py-1 rounded 
+                                    {% if job.status == 'completed' %}bg-green-100 text-green-800
+                                    {% elif job.status == 'running' %}bg-blue-100 text-blue-800
+                                    {% elif job.status == 'failed' %}bg-red-100 text-red-800
+                                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                    {{ job.status }}
+                                </span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                {{ job.processed_companies }} / {{ job.total_companies }} companies
+                            </div>
+                        </a>
+                        {% else %}
+                        <p class="text-gray-500 text-sm">No jobs yet</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        
+        let personFilterIndex = 1;
+        
+        function getCompanyFilters() {
+            const filters = {};
+            
+            // Location
+            const locations = Array.from(document.getElementById('company_location').selectedOptions).map(o => o.value);
+            if (locations.length > 0) {
+                filters.company_location_search = { include: locations, exclude: [] };
+            }
+            
+            // B2B
+            const b2b = document.getElementById('company_b2b').value;
+            if (b2b !== '') {
+                filters.company_attributes = { b2b: b2b === 'true' };
+            }
+            
+            // Headcount
+            const headcounts = Array.from(document.getElementById('company_headcount').selectedOptions).map(o => o.value);
+            if (headcounts.length > 0 && headcounts.length < 11) {
+                filters.company_headcount_range = headcounts;
+            }
+            
+            // Industry
+            const industry = document.getElementById('company_industry').value.trim();
+            if (industry) {
+                filters.company_industry = { include: industry.split(',').map(s => s.trim()), exclude: [] };
+            }
+            
+            // Min SDR headcount
+            const minSdr = parseInt(document.getElementById('min_sdr_headcount').value) || 2;
+            filters.company_headcount_by_department = [{
+                department: "Sales Development",
+                min: minSdr,
+                max: 100000
+            }];
+            
+            // Keywords
+            const keywords = document.getElementById('company_keywords').value.trim();
+            if (keywords) {
+                filters.company_keywords = { 
+                    include: keywords.split(',').map(s => s.trim()), 
+                    exclude: [],
+                    include_all: false,
+                    include_company_description: true,
+                    include_company_description_seo: true
+                };
+            }
+            
+            return filters;
+        }
+        
+        function getPersonFilters() {
+            const blocks = document.querySelectorAll('.person-filter-block');
+            const filters = [];
+            
+            blocks.forEach(block => {
+                const name = block.querySelector('.person-query-name').value || 'Unnamed Query';
+                const departments = Array.from(block.querySelector('.person-department').selectedOptions).map(o => o.value);
+                const seniorities = Array.from(block.querySelector('.person-seniority').selectedOptions).map(o => o.value);
+                const title = block.querySelector('.person-title').value.trim();
+                
+                const filterObj = {};
+                
+                if (departments.length > 0) {
+                    filterObj.person_department = { include: departments, exclude: [] };
+                }
+                
+                if (seniorities.length > 0) {
+                    filterObj.person_seniority = { include: seniorities, exclude: [] };
+                }
+                
+                if (title) {
+                    filterObj.person_job_title = { include: title.split(',').map(s => s.trim()), exclude: [] };
+                }
+                
+                filters.push({ name, filters: filterObj });
+            });
+            
+            return filters;
+        }
+        
+        function addPersonFilter() {
+            const container = document.getElementById('person_filters_container');
+            const html = `
+                <div class="border rounded-lg p-4 person-filter-block" data-index="${personFilterIndex}">
+                    <div class="flex justify-between items-center mb-3">
+                        <input type="text" class="person-query-name font-medium border-b border-transparent hover:border-gray-300 focus:border-blue-500 outline-none" value="Person Query ${personFilterIndex + 1}">
+                        <button type="button" onclick="removePersonFilter(${personFilterIndex})" class="text-red-500 hover:text-red-700">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Department</label>
+                            <select class="person-department w-full border rounded p-1.5 text-sm" multiple>
+                                <option value="Sales Development">Sales Development</option>
+                                <option value="Sales">Sales</option>
+                                <option value="Marketing">Marketing</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Seniority</label>
+                            <select class="person-seniority w-full border rounded p-1.5 text-sm" multiple>
+                                <option value="Entry">Entry</option>
+                                <option value="Senior">Senior</option>
+                                <option value="Intern">Intern</option>
+                                <option value="Manager">Manager</option>
+                                <option value="Director">Director</option>
+                                <option value="Vice President">Vice President</option>
+                                <option value="C-Suite">C-Suite</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Job Title Contains (optional)</label>
+                            <input type="text" class="person-title w-full border rounded p-1.5 text-sm" placeholder="e.g., Account Executive">
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+            personFilterIndex++;
+            lucide.createIcons();
+        }
+        
+        function removePersonFilter(index) {
+            const block = document.querySelector(`.person-filter-block[data-index="${index}"]`);
+            if (block) block.remove();
+        }
+        
+        async function runPreview() {
+            const panel = document.getElementById('preview_panel');
+            const content = document.getElementById('preview_content');
+            
+            panel.classList.remove('hidden');
+            content.innerHTML = '<p class="text-gray-500">Loading preview...</p>';
+            
+            try {
+                const response = await fetch('/api/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        company_filters: getCompanyFilters(),
+                        person_filters: getPersonFilters()
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    content.innerHTML = `<p class="text-red-600">Error: ${data.message || data.error_code}</p>`;
+                    return;
+                }
+                
+                let html = `
+                    <div class="space-y-4">
+                        <div class="bg-blue-50 p-3 rounded">
+                            <p class="text-2xl font-bold text-blue-900">${data.company_count.toLocaleString()}</p>
+                            <p class="text-sm text-blue-700">companies found</p>
+                        </div>
+                        
+                        <div class="bg-yellow-50 p-3 rounded">
+                            <p class="text-lg font-semibold text-yellow-900">${data.estimated_credits.toLocaleString()} credits</p>
+                            <p class="text-xs text-yellow-700">
+                                ${data.credit_breakdown.company_search} (companies) + 
+                                ${data.credit_breakdown.person_searches} (people)
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <p class="text-sm font-medium mb-2">Sample Companies:</p>
+                            <ul class="text-sm space-y-1">
+                `;
+                
+                data.sample_companies.forEach(c => {
+                    html += `<li class="text-gray-700">• ${c.name} (${c.industry || 'N/A'})</li>`;
+                });
+                
+                html += '</ul></div>';
+                
+                if (data.person_preview) {
+                    html += `
+                        <div>
+                            <p class="text-sm font-medium mb-2">${data.person_preview.query_name} at ${data.person_preview.company_name}:</p>
+                            <p class="text-sm text-gray-600">${data.person_preview.total_count} people found</p>
+                            <ul class="text-sm space-y-1 mt-1">
+                    `;
+                    data.person_preview.sample_people.forEach(p => {
+                        html += `<li class="text-gray-700">• ${p.name} - ${p.title || 'N/A'}</li>`;
+                    });
+                    html += '</ul></div>';
+                }
+                
+                html += '</div>';
+                content.innerHTML = html;
+                
+            } catch (err) {
+                content.innerHTML = `<p class="text-red-600">Error: ${err.message}</p>`;
+            }
+        }
+        
+        async function startJob() {
+            const jobName = prompt('Enter job name:', `Market Sizing ${new Date().toLocaleDateString()}`);
+            if (!jobName) return;
+            
+            try {
+                const response = await fetch('/api/jobs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: jobName,
+                        company_filters: getCompanyFilters(),
+                        person_filters: getPersonFilters()
+                    })
+                });
+                
+                const job = await response.json();
+                window.location.href = `/results/${job.id}`;
+                
+            } catch (err) {
+                alert('Error starting job: ' + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
