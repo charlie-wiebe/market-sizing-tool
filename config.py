@@ -16,6 +16,14 @@ def get_database_url():
         url = url.replace("postgres://", "postgresql+psycopg://", 1)
     elif url.startswith("postgresql://") and "+psycopg" not in url:
         url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+    
+    # Add SSL mode for Render PostgreSQL
+    if "render.com" in url or "dpg-" in url:
+        if "?" in url:
+            url += "&sslmode=require"
+        else:
+            url += "?sslmode=require"
+    
     return url
 
 class Config:
