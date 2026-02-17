@@ -31,6 +31,12 @@ class Config:
     SQLALCHEMY_DATABASE_URI = get_database_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
+    # Engine options to handle connection pooling and SSL issues
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,  # Test connections before using
+        "pool_recycle": 300,    # Recycle connections every 5 min
+    }
+    
     PROSPEO_API_KEY = os.getenv("PROSPEO_API_KEY")
     PROSPEO_BASE_URL = "https://api.prospeo.io"
     
