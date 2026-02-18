@@ -7,7 +7,7 @@ import csv
 import io
 
 from config import Config
-from models.database import db, Job, Company, PersonCount, generate_query_fingerprint
+from models.database import db, Job, Company, PersonCount, HubSpotEnrichment, generate_query_fingerprint
 from services.prospeo_client import ProspeoClient
 from services.query_segmenter import QuerySegmenter
 from services.domain_utils import registrable_root_domain
@@ -46,6 +46,20 @@ running_jobs = {}
 @app.route("/")
 def index():
     jobs = Job.query.order_by(Job.created_at.desc()).limit(20).all()
+    
+    # Add HubSpot enrichment statistics for each job
+    for job in jobs:
+        if job.mode == 'detailed':
+            # Count total companies and HubSpot enrichments for this job
+            total_companies = Company.query.filter_by(job_id=job.id).count()
+            hubspot_enrichments = HubSpotEnrichment.query.filter_by(job_id=job.id).count()
+            
+            job.hubspot_enriched_count = hubspot_enrichments
+            job.hubspot_enrichment_percentage = round((hubspot_enrichments / total_companies * 100), 1) if total_companies > 0 else 0
+        else:
+            job.hubspot_enriched_count = 0
+            job.hubspot_enrichment_percentage = 0
+    
     return render_template("index.html", jobs=jobs)
 
 
@@ -471,7 +485,10 @@ def export_job(job_id):
             "has_mobile_apps", "has_online_reviews", "has_pricing",
             
             # Classification
-            "linkedin_id"
+            "linkedin_id",
+            
+            # HubSpot enrichment
+            "hubspot_object_id", "hubspot_vertical", "hubspot_lookup_method"
         ]
         
         # Add person query columns
@@ -537,7 +554,12 @@ def export_job(job_id):
                 company.has_pricing if company.has_pricing is not None else "",
                 
                 # Classification
-                company.linkedin_id or ""
+                company.linkedin_id or "",
+                
+                # HubSpot enrichment
+                company.hubspot_enrichments.first().hubspot_object_id if company.hubspot_enrichments.first() else "",
+                company.hubspot_enrichments.first().vertical if company.hubspot_enrichments.first() else "",
+                company.hubspot_enrichments.first().lookup_method if company.hubspot_enrichments.first() else ""
             ]
             
             # Add person count columns

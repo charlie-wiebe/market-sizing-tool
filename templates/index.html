@@ -172,6 +172,11 @@
                             </div>
                             <div class="text-xs text-gray-500 mt-1">
                                 {{ job.processed_companies }} / {{ job.total_companies }} companies
+                                {% if job.mode == 'detailed' and job.status == 'completed' and job.hubspot_enriched_count is defined %}
+                                <span class="ml-2 text-blue-600" title="Companies found in HubSpot">
+                                    • {{ job.hubspot_enriched_count }}/{{ job.processed_companies }} in HubSpot ({{ job.hubspot_enrichment_percentage }}%)
+                                </span>
+                                {% endif %}
                             </div>
                         </a>
                         {% else %}

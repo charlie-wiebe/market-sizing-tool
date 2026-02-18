@@ -128,6 +128,7 @@ class Company(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     person_counts = db.relationship('PersonCount', backref='company', lazy='dynamic')
+    hubspot_enrichments = db.relationship('HubSpotEnrichment', backref='company', lazy='dynamic')
     
     def to_dict(self):
         return {
@@ -205,20 +206,47 @@ class PersonCount(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
     job_id = db.Column(db.Integer, db.ForeignKey('jobs.id'), nullable=False)
-    query_name = db.Column(db.String(100), nullable=False)  # e.g., "SDR Count", "Sales Rep Count"
+    prospeo_company_id = db.Column(db.String(100), index=True)  # Link to company's prospeo ID
+    query_name = db.Column(db.String(255), nullable=False)  # Name of the person search query
     total_count = db.Column(db.Integer, default=0)
-    status = db.Column(db.String(50), default='ok')  # ok, error, no_results
-    error_code = db.Column(db.String(100))
-    prospeo_company_id = db.Column(db.String(100), index=True)  # Link to Prospeo company ID
+    status = db.Column(db.String(20), default='ok')  # ok, error
+    error_code = db.Column(db.String(50))  # INVALID_FILTERS, NO_RESULTS, etc.
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def to_dict(self):
         return {
             'id': self.id,
             'company_id': self.company_id,
+            'job_id': self.job_id,
+            'prospeo_company_id': self.prospeo_company_id,
             'query_name': self.query_name,
             'total_count': self.total_count,
             'status': self.status,
             'error_code': self.error_code,
-            'prospeo_company_id': self.prospeo_company_id
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class HubSpotEnrichment(db.Model):
+    __tablename__ = 'hubspot_enrichments'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
+    job_id = db.Column(db.Integer, db.ForeignKey('jobs.id'), nullable=False)
+    hubspot_object_id = db.Column(db.String(100), index=True)  # HubSpot record ID
+    vertical = db.Column(db.String(255))  # HubSpot vertical field
+    lookup_method = db.Column(db.String(50))  # 'linkedin_handle', 'domain', or 'both_match'
+    hubspot_created_date = db.Column(db.DateTime)  # For duplicate resolution
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'company_id': self.company_id,
+            'job_id': self.job_id,
+            'hubspot_object_id': self.hubspot_object_id,
+            'vertical': self.vertical,
+            'lookup_method': self.lookup_method,
+            'hubspot_created_date': self.hubspot_created_date.isoformat() if self.hubspot_created_date else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }

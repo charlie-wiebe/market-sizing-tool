@@ -43,3 +43,10 @@ class Config:
     # Rate limits
     PROSPEO_MAX_PER_SECOND = 30
     PROSPEO_MAX_PER_MINUTE = 1800
+    
+    # HubSpot API configuration
+    HUBSPOT_API_KEY = os.getenv("HUBSPOT_API_KEY")
+    HUBSPOT_BASE_URL = "https://api.hubapi.com"
+    
+    # HubSpot rate limits (100 requests per 10 seconds)
+    HUBSPOT_MAX_PER_10_SECONDS = 100

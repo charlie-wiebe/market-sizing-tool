@@ -1,14 +1,16 @@
 import threading
 from datetime import datetime
-from models.database import db, Job, Company, PersonCount
+from models.database import db, Job, Company, PersonCount, HubSpotEnrichment
 from services.prospeo_client import ProspeoClient
 from services.domain_utils import registrable_root_domain
 from services.query_segmenter import QuerySegmenter
+from services.hubspot_client import HubSpotClient
 
 class MarketSizingJob:
     def __init__(self, job_id):
         self.job_id = job_id
         self.client = ProspeoClient()
+        self.hubspot_client = HubSpotClient()
         self.segmenter = QuerySegmenter(self.client)
         self._stop_requested = False
 
@@ -87,6 +89,10 @@ class MarketSizingJob:
                         db.session.commit()
                 
                 db.session.commit()
+        
+        # Run HubSpot enrichment for detailed jobs
+        if job.mode == 'detailed':
+            self._enrich_companies_with_hubspot(job)
 
     def _save_company(self, job_id, data):
         """Upsert company - update existing by prospeo_company_id or create new."""
@@ -225,6 +231,66 @@ class MarketSizingJob:
             db.session.add(person_count)
         
         return credits_used
+
+    def _enrich_companies_with_hubspot(self, job):
+        """Enrich companies with HubSpot data using batch processing."""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # Get all companies for this job
+            companies = Company.query.filter_by(job_id=job.id).all()
+            if not companies:
+                logger.info("No companies to enrich with HubSpot")
+                return
+            
+            logger.info(f"Starting HubSpot enrichment for {len(companies)} companies")
+            
+            # Process companies in batches of 50 for efficiency
+            batch_size = 50
+            total_enriched = 0
+            
+            for i in range(0, len(companies), batch_size):
+                if self._stop_requested:
+                    break
+                
+                batch = companies[i:i + batch_size]
+                
+                # Prepare batch data for HubSpot client
+                batch_data = []
+                for company in batch:
+                    batch_data.append({
+                        'id': company.id,
+                        'linkedin_url': company.linkedin_url,
+                        'domain': company.domain
+                    })
+                
+                # Get HubSpot enrichments for this batch
+                enrichments = self.hubspot_client.batch_enrich_companies(batch_data)
+                
+                # Save enrichment results to database
+                for company_id, enrichment_data in enrichments.items():
+                    if enrichment_data:
+                        hubspot_enrichment = HubSpotEnrichment(
+                            company_id=company_id,
+                            job_id=job.id,
+                            hubspot_object_id=enrichment_data['hubspot_object_id'],
+                            vertical=enrichment_data['vertical'],
+                            lookup_method=enrichment_data['lookup_method'],
+                            hubspot_created_date=enrichment_data['hubspot_created_date']
+                        )
+                        db.session.add(hubspot_enrichment)
+                        total_enriched += 1
+                
+                # Commit batch results
+                db.session.commit()
+                logger.info(f"Processed HubSpot enrichment batch {i//batch_size + 1}/{(len(companies) + batch_size - 1)//batch_size}")
+            
+            logger.info(f"HubSpot enrichment completed: {total_enriched} companies enriched out of {len(companies)}")
+            
+        except Exception as e:
+            logger.error(f"HubSpot enrichment failed: {e}")
+            # Continue job processing even if HubSpot enrichment fails
 
 
 def start_job_async(job_id, app):
