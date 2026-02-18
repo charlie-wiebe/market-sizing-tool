@@ -446,17 +446,14 @@ def export_job(job_id):
         for pf in (job.person_filters or []):
             person_query_names.add(pf.get("name", "Unnamed Query"))
         
-        # Comprehensive headers with all Prospeo fields
+        # Headers with actual Prospeo API fields only
         headers = [
             # Core fields
-            "prospeo_company_id", "name", "domain", "website", "root_domain",
+            "prospeo_company_id", "name", "website", "domain",
             
-            # Extended company information  
-            "description", "description_seo", "description_ai", "company_type", "employee_range",
-            "logo_url",
-            
-            # Business details
-            "industry", "headcount", "founded_year", "funding_stage",
+            # Basic company information  
+            "description", "description_seo", "description_ai", "company_type", 
+            "industry", "employee_count", "employee_range", "founded", "logo_url",
             
             # Location details
             "location_country", "location_city", "location_state", "location_country_code", 
@@ -467,10 +464,10 @@ def export_job(job_id):
             "instagram_url", "youtube_url",
             
             # Revenue information
-            "revenue_range", "revenue_min", "revenue_max", "revenue_printed",
+            "revenue_min", "revenue_max", "revenue_range_printed",
             
-            # Attribute flags
-            "b2b", "has_demo", "has_free_trial", "has_downloadable", 
+            # Attributes
+            "is_b2b", "has_demo", "has_free_trial", "has_downloadable", 
             "has_mobile_apps", "has_online_reviews", "has_pricing",
             
             # Classification
@@ -496,23 +493,19 @@ def export_job(job_id):
                 # Core fields
                 company.prospeo_company_id or "",
                 company.name or "",
-                company.domain or "",
                 company.website or "",
-                company.root_domain or "",
+                company.domain or "",
                 
-                # Extended company information
+                # Basic company information
                 (company.description or "")[:500] if company.description else "",  # Truncate long descriptions
                 (company.description_seo or "")[:200] if company.description_seo else "",
                 (company.description_ai or "")[:200] if company.description_ai else "",
                 company.company_type or "",
-                company.employee_range or "",
-                company.logo_url or "",
-                
-                # Business details
                 company.industry or "",
-                company.headcount or "",
-                company.founded_year or "",
-                company.funding_stage or "",
+                company.employee_count or "",
+                company.employee_range or "",
+                company.founded or "",
+                company.logo_url or "",
                 
                 # Location details
                 company.location_country or "",
@@ -530,13 +523,12 @@ def export_job(job_id):
                 company.youtube_url or "",
                 
                 # Revenue information
-                company.revenue_range or "",
                 company.revenue_min or "",
                 company.revenue_max or "",
-                company.revenue_printed or "",
+                company.revenue_range_printed or "",
                 
-                # Attribute flags
-                company.b2b if company.b2b is not None else "",
+                # Attributes
+                company.is_b2b if company.is_b2b is not None else "",
                 company.has_demo if company.has_demo is not None else "",
                 company.has_free_trial if company.has_free_trial is not None else "",
                 company.has_downloadable if company.has_downloadable is not None else "",
