@@ -30,6 +30,9 @@ with app.app_context():
             conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS query_fingerprint VARCHAR(32)"))
             conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'quick_tam'"))
             conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS aggregate_results JSON"))
+            # Drop bloated columns from person_counts
+            for col in ['sample_titles', 'sample_names', 'query_filters']:
+                conn.execute(text(f"ALTER TABLE person_counts DROP COLUMN IF EXISTS {col}"))
             conn.commit()
         except Exception as e:
             print(f"Migration note: {e}")

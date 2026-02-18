@@ -113,10 +113,7 @@ class PersonCount(db.Model):
     company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
     job_id = db.Column(db.Integer, db.ForeignKey('jobs.id'), nullable=False)
     query_name = db.Column(db.String(100), nullable=False)  # e.g., "SDR Count", "Sales Rep Count"
-    query_filters = db.Column(db.JSON)
     total_count = db.Column(db.Integer, default=0)
-    sample_titles = db.Column(db.JSON)  # Array of first 25 job titles
-    sample_names = db.Column(db.JSON)  # Array of first 25 names
     status = db.Column(db.String(50), default='ok')  # ok, error, no_results
     error_code = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -126,10 +123,7 @@ class PersonCount(db.Model):
             'id': self.id,
             'company_id': self.company_id,
             'query_name': self.query_name,
-            'query_filters': self.query_filters,
             'total_count': self.total_count,
-            'sample_titles': self.sample_titles,
-            'sample_names': self.sample_names,
             'status': self.status,
             'error_code': self.error_code
         }

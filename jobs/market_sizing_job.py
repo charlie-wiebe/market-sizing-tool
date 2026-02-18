@@ -170,8 +170,6 @@ class MarketSizingJob:
             pagination = self.client.get_pagination(response)
             total_count = pagination["total_count"]
             
-            sample_titles = []
-            sample_names = []
             status = "ok"
             error_code = None
             
@@ -179,25 +177,12 @@ class MarketSizingJob:
                 status = "error"
                 error_code = self.client.get_error_code(response)
                 total_count = 0
-            else:
-                people = self.client.extract_people(response)
-                for person in people[:25]:
-                    if isinstance(person, dict):
-                        title = person.get("job_title") or person.get("title")
-                        name = person.get("full_name") or f"{person.get('first_name', '')} {person.get('last_name', '')}".strip()
-                        if title:
-                            sample_titles.append(title)
-                        if name:
-                            sample_names.append(name)
             
             person_count = PersonCount(
                 company_id=company.id,
                 job_id=job.id,
                 query_name=query_name,
-                query_filters=filters,
                 total_count=total_count,
-                sample_titles=sample_titles,
-                sample_names=sample_names,
                 status=status,
                 error_code=error_code
             )
