@@ -6,14 +6,29 @@
     <title>Market Sizing Tool - Prospeo API</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/static/data.js"></script>
+    <script src="/static/components.js"></script>
+    <style>
+        .tab-active { border-color: rgb(59 130 246); color: rgb(59 130 246); background: rgb(239 246 255); }
+        .tab-inactive { border-color: transparent; color: rgb(107 114 128); }
+        .tab-inactive:hover { color: rgb(55 65 81); }
+        .stat-card { background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%); }
+        .stat-card-green { background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%); }
+    </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div class="max-w-7xl mx-auto px-4 py-8">
-        <header class="mb-8">
+        <header class="mb-6">
             <h1 class="text-3xl font-bold text-gray-900">Market Sizing Tool</h1>
-            <p class="text-gray-600 mt-2">Build Prospeo API queries to size your TAM</p>
+            <p class="text-gray-600 mt-1">Build Prospeo API queries to size your TAM</p>
+            <div class="mt-4 border-b flex gap-1">
+                <button onclick="switchTab('builder')" id="tab-btn-builder" class="px-4 py-2 text-sm font-medium border-b-2 tab-active">Query Builder</button>
+                <button onclick="switchTab('samples')" id="tab-btn-samples" class="px-4 py-2 text-sm font-medium border-b-2 tab-inactive">Sample Companies</button>
+            </div>
         </header>
 
+        <!-- Query Builder Tab -->
+        <div id="tab-content-builder">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <!-- Query Builder -->
             <div class="lg:col-span-2 space-y-6">
@@ -26,12 +41,8 @@
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Location (Countries)</label>
-                            <select id="company_location" multiple class="w-full border rounded-md p-2 h-24">
-                                <option value="United States" selected>United States</option>
-                                <option value="United Kingdom" selected>United Kingdom</option>
-                                <option value="Canada" selected>Canada</option>
-                            </select>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Company Location</label>
+                            <div id="company_location_widget"></div>
                         </div>
                         
                         <div>
@@ -45,30 +56,17 @@
                         
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Employee Range</label>
-                            <select id="company_headcount" multiple class="w-full border rounded-md p-2 h-32">
-                                <option value="1-10">1-10</option>
-                                <option value="11-20">11-20</option>
-                                <option value="21-50" selected>21-50</option>
-                                <option value="51-100" selected>51-100</option>
-                                <option value="101-200" selected>101-200</option>
-                                <option value="201-500" selected>201-500</option>
-                                <option value="501-1000" selected>501-1000</option>
-                                <option value="1001-2000" selected>1001-2000</option>
-                                <option value="2001-5000" selected>2001-5000</option>
-                                <option value="5001-10000" selected>5001-10000</option>
-                                <option value="10000+" selected>10000+</option>
-                            </select>
+                            <div id="company_headcount_widget"></div>
                         </div>
                         
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Industry (optional)</label>
-                            <input type="text" id="company_industry" placeholder="e.g., Software Development" class="w-full border rounded-md p-2">
-                            <p class="text-xs text-gray-500 mt-1">Comma-separated list</p>
+                            <div id="company_industry_widget"></div>
                         </div>
                         
                         <div class="md:col-span-2">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Min Sales Development Headcount</label>
-                            <input type="number" id="min_sdr_headcount" value="2" min="1" class="w-32 border rounded-md p-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Headcount by Department</label>
+                            <div id="company_headcount_by_dept_widget"></div>
                         </div>
                         
                         <div class="md:col-span-2">
@@ -78,7 +76,7 @@
                     </div>
                 </div>
 
-                <!-- Person Filters -->
+                <!-- Person Search Definitions -->
                 <div class="bg-white rounded-lg shadow p-6">
                     <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
                         <i data-lucide="users" class="w-5 h-5"></i>
@@ -86,44 +84,7 @@
                     </h2>
                     
                     <div id="person_filters_container" class="space-y-4">
-                        <!-- SDR Query (default) -->
-                        <div class="border rounded-lg p-4 person-filter-block" data-index="0">
-                            <div class="flex justify-between items-center mb-3">
-                                <input type="text" class="person-query-name font-medium border-b border-transparent hover:border-gray-300 focus:border-blue-500 outline-none" value="SDR Count">
-                                <button type="button" onclick="removePersonFilter(0)" class="text-red-500 hover:text-red-700">
-                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                </button>
-                            </div>
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-600 mb-1">Department</label>
-                                    <select class="person-department w-full border rounded p-1.5 text-sm" multiple>
-                                        <option value="Sales Development" selected>Sales Development</option>
-                                        <option value="Sales">Sales</option>
-                                        <option value="Marketing">Marketing</option>
-                                    </select>
-                                </div>
-                                
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-600 mb-1">Seniority</label>
-                                    <select class="person-seniority w-full border rounded p-1.5 text-sm" multiple>
-                                        <option value="Entry" selected>Entry</option>
-                                        <option value="Senior" selected>Senior</option>
-                                        <option value="Intern" selected>Intern</option>
-                                        <option value="Manager">Manager</option>
-                                        <option value="Director">Director</option>
-                                        <option value="Vice President">Vice President</option>
-                                        <option value="C-Suite">C-Suite</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="md:col-span-2">
-                                    <label class="block text-xs font-medium text-gray-600 mb-1">Job Title Contains (optional)</label>
-                                    <input type="text" class="person-title w-full border rounded p-1.5 text-sm" placeholder="e.g., SDR, BDR">
-                                </div>
-                            </div>
-                        </div>
+                        <!-- Person blocks are created by JS -->
                     </div>
                     
                     <button type="button" onclick="addPersonFilter()" class="mt-4 text-blue-600 hover:text-blue-800 flex items-center gap-1">
@@ -220,20 +181,171 @@
                 </div>
             </div>
         </div>
+        </div><!-- end tab-content-builder -->
+
+        <!-- Sample Companies Tab -->
+        <div id="tab-content-samples" class="hidden">
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div id="samples_empty" class="p-8 text-center text-gray-500">
+                    <i data-lucide="building-2" class="w-12 h-12 mx-auto mb-3 text-gray-300"></i>
+                    <p class="text-lg font-medium">No sample companies yet</p>
+                    <p class="text-sm mt-1">Run a Preview on the Query Builder tab to see sample companies here.</p>
+                </div>
+                <div id="samples_table_wrap" class="hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+                                <tr>
+                                    <th class="px-4 py-3">Company</th>
+                                    <th class="px-4 py-3">Industry</th>
+                                    <th class="px-4 py-3">Employees</th>
+                                    <th class="px-4 py-3">Country</th>
+                                    <th class="px-4 py-3">City</th>
+                                    <th class="px-4 py-3">Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody id="samples_table_body" class="divide-y"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
         lucide.createIcons();
         
-        let personFilterIndex = 1;
+        // ========== Widget instances ==========
+        let companyLocationWidget, companyHeadcountWidget, companyIndustryWidget, companyHcByDeptWidget;
+        let personFilterIndex = 0;
+        const personBlocks = {}; // index -> { dept, seniority, jobTitle, location, timeRole, timeCompany }
+        let lastPreviewData = null;
         
+        // ========== Tab switching ==========
+        function switchTab(tab) {
+            document.getElementById('tab-content-builder').classList.toggle('hidden', tab !== 'builder');
+            document.getElementById('tab-content-samples').classList.toggle('hidden', tab !== 'samples');
+            document.getElementById('tab-btn-builder').className = `px-4 py-2 text-sm font-medium border-b-2 ${tab === 'builder' ? 'tab-active' : 'tab-inactive'}`;
+            document.getElementById('tab-btn-samples').className = `px-4 py-2 text-sm font-medium border-b-2 ${tab === 'samples' ? 'tab-active' : 'tab-inactive'}`;
+            lucide.createIcons();
+        }
+        
+        // ========== Initialize Company Filter Widgets ==========
+        function initCompanyWidgets() {
+            companyLocationWidget = new LocationAutocomplete(
+                document.getElementById('company_location_widget'),
+                { includeValues: ['United States #US'] }
+            );
+            
+            companyHeadcountWidget = new CheckboxMultiSelect(
+                document.getElementById('company_headcount_widget'),
+                EMPLOYEE_RANGES,
+                { selected: ['21-50','51-100','101-200','201-500','501-1000','1001-2000','2001-5000','5001-10000','10000+'], searchable: false }
+            );
+            
+            companyIndustryWidget = new CheckboxMultiSelect(
+                document.getElementById('company_industry_widget'),
+                INDUSTRIES,
+                { placeholder: 'Select industries...', searchable: true }
+            );
+            
+            companyHcByDeptWidget = new HeadcountByDeptWidget(
+                document.getElementById('company_headcount_by_dept_widget'),
+                { rules: [{ department: 'Sales Development', min: 3, max: 100000 }] }
+            );
+        }
+        
+        // ========== Person Filter Block Creation ==========
+        function addPersonFilter(name = null) {
+            const idx = personFilterIndex++;
+            const container = document.getElementById('person_filters_container');
+            
+            const block = document.createElement('div');
+            block.className = 'border rounded-lg p-4 person-filter-block';
+            block.dataset.index = idx;
+            block.innerHTML = `
+                <div class="flex justify-between items-center mb-3">
+                    <input type="text" class="person-query-name font-medium border-b border-transparent hover:border-gray-300 focus:border-blue-500 outline-none" value="${name || 'Person Query ' + (idx + 1)}">
+                    <button type="button" class="text-red-500 hover:text-red-700 pf-remove">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Department</label>
+                        <div class="pf-department"></div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Seniority</label>
+                        <div class="pf-seniority"></div>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Job Title</label>
+                        <div class="pf-job-title"></div>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Person Location</label>
+                        <div class="pf-location"></div>
+                    </div>
+                    <div>
+                        <div class="pf-time-role"></div>
+                    </div>
+                    <div>
+                        <div class="pf-time-company"></div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(block);
+            
+            // Remove button
+            block.querySelector('.pf-remove').addEventListener('click', () => {
+                block.remove();
+                delete personBlocks[idx];
+            });
+            
+            // Initialize widgets for this block
+            const deptWidget = new IncludeExcludeSelect(
+                block.querySelector('.pf-department'),
+                DEPARTMENTS,
+                { tree: true, includeSelected: idx === 0 ? ['Sales Development'] : [] }
+            );
+            
+            const seniorityWidget = new IncludeExcludeSelect(
+                block.querySelector('.pf-seniority'),
+                SENIORITIES,
+                { tree: false, includeSelected: idx === 0 ? ['Entry', 'Senior'] : [] }
+            );
+            
+            const jobTitleWidget = new JobTitleWidget(block.querySelector('.pf-job-title'));
+            
+            const locationWidget = new LocationAutocomplete(
+                block.querySelector('.pf-location'),
+                { includeValues: idx === 0 ? ['United States #US'] : [] }
+            );
+            
+            const timeRoleWidget = new TimeRangeWidget(
+                block.querySelector('.pf-time-role'),
+                { label: 'Time in Current Role' }
+            );
+            
+            const timeCompanyWidget = new TimeRangeWidget(
+                block.querySelector('.pf-time-company'),
+                { label: 'Time in Current Company' }
+            );
+            
+            personBlocks[idx] = { dept: deptWidget, seniority: seniorityWidget, jobTitle: jobTitleWidget, location: locationWidget, timeRole: timeRoleWidget, timeCompany: timeCompanyWidget };
+            
+            lucide.createIcons();
+        }
+        
+        // ========== getCompanyFilters — §G ==========
         function getCompanyFilters() {
             const filters = {};
             
-            // Location
-            const locations = Array.from(document.getElementById('company_location').selectedOptions).map(o => o.value);
-            if (locations.length > 0) {
-                filters.company_location_search = { include: locations, exclude: [] };
+            // Company Location (include/exclude)
+            const locVals = companyLocationWidget.getValues();
+            if (locVals.include.length || locVals.exclude.length) {
+                filters.company_location_search = locVals;
             }
             
             // B2B
@@ -242,25 +354,23 @@
                 filters.company_attributes = { b2b: b2b === 'true' };
             }
             
-            // Headcount
-            const headcounts = Array.from(document.getElementById('company_headcount').selectedOptions).map(o => o.value);
+            // Employee Range
+            const headcounts = companyHeadcountWidget.getSelected();
             if (headcounts.length > 0 && headcounts.length < 11) {
                 filters.company_headcount_range = headcounts;
             }
             
             // Industry
-            const industry = document.getElementById('company_industry').value.trim();
-            if (industry) {
-                filters.company_industry = { include: industry.split(',').map(s => s.trim()), exclude: [] };
+            const industries = companyIndustryWidget.getSelected();
+            if (industries.length > 0) {
+                filters.company_industry = { include: industries, exclude: [] };
             }
             
-            // Min SDR headcount
-            const minSdr = parseInt(document.getElementById('min_sdr_headcount').value) || 2;
-            filters.company_headcount_by_department = [{
-                department: "Sales Development",
-                min: minSdr,
-                max: 100000
-            }];
+            // Headcount by Department
+            const hcRules = companyHcByDeptWidget.getRules();
+            if (hcRules.length > 0) {
+                filters.company_headcount_by_department = hcRules;
+            }
             
             // Keywords
             const keywords = document.getElementById('company_keywords').value.trim();
@@ -277,84 +387,68 @@
             return filters;
         }
         
+        // ========== getPersonFilters — §G ==========
         function getPersonFilters() {
             const blocks = document.querySelectorAll('.person-filter-block');
-            const filters = [];
+            const results = [];
             
             blocks.forEach(block => {
-                const name = block.querySelector('.person-query-name').value || 'Unnamed Query';
-                const departments = Array.from(block.querySelector('.person-department').selectedOptions).map(o => o.value);
-                const seniorities = Array.from(block.querySelector('.person-seniority').selectedOptions).map(o => o.value);
-                const title = block.querySelector('.person-title').value.trim();
+                const idx = parseInt(block.dataset.index);
+                const widgets = personBlocks[idx];
+                if (!widgets) return;
                 
+                const name = block.querySelector('.person-query-name').value || 'Unnamed Query';
                 const filterObj = {};
                 
-                if (departments.length > 0) {
-                    filterObj.person_department = { include: departments, exclude: [] };
+                // Department (include/exclude)
+                const deptVals = widgets.dept.getValues();
+                if (deptVals.include.length || deptVals.exclude.length) {
+                    filterObj.person_department = deptVals;
                 }
                 
-                if (seniorities.length > 0) {
-                    filterObj.person_seniority = { include: seniorities, exclude: [] };
+                // Seniority (include/exclude)
+                const senVals = widgets.seniority.getValues();
+                if (senVals.include.length || senVals.exclude.length) {
+                    filterObj.person_seniority = senVals;
                 }
                 
-                if (title) {
-                    filterObj.person_job_title = { include: title.split(',').map(s => s.trim()), exclude: [] };
+                // Job Title (standard or boolean)
+                const jtVals = widgets.jobTitle.getValues();
+                if (jtVals.mode === 'boolean' && jtVals.boolean_search) {
+                    filterObj.person_job_title = { boolean_search: jtVals.boolean_search };
+                } else if (jtVals.mode === 'standard' && (jtVals.include.length || jtVals.exclude.length)) {
+                    filterObj.person_job_title = {
+                        include: jtVals.include,
+                        exclude: jtVals.exclude,
+                        match_only_exact_job_titles: jtVals.match_only_exact_job_titles
+                    };
                 }
                 
-                filters.push({ name, filters: filterObj });
+                // Person Location (include/exclude)
+                const locVals = widgets.location.getValues();
+                if (locVals.include.length || locVals.exclude.length) {
+                    filterObj.person_location_search = locVals;
+                }
+                
+                // Time in Current Role
+                const trVals = widgets.timeRole.getValues();
+                if (trVals) {
+                    filterObj.person_time_in_current_role = trVals;
+                }
+                
+                // Time in Current Company
+                const tcVals = widgets.timeCompany.getValues();
+                if (tcVals) {
+                    filterObj.person_time_in_current_company = tcVals;
+                }
+                
+                results.push({ name, filters: filterObj });
             });
             
-            return filters;
+            return results;
         }
         
-        function addPersonFilter() {
-            const container = document.getElementById('person_filters_container');
-            const html = `
-                <div class="border rounded-lg p-4 person-filter-block" data-index="${personFilterIndex}">
-                    <div class="flex justify-between items-center mb-3">
-                        <input type="text" class="person-query-name font-medium border-b border-transparent hover:border-gray-300 focus:border-blue-500 outline-none" value="Person Query ${personFilterIndex + 1}">
-                        <button type="button" onclick="removePersonFilter(${personFilterIndex})" class="text-red-500 hover:text-red-700">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        </button>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">Department</label>
-                            <select class="person-department w-full border rounded p-1.5 text-sm" multiple>
-                                <option value="Sales Development">Sales Development</option>
-                                <option value="Sales">Sales</option>
-                                <option value="Marketing">Marketing</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">Seniority</label>
-                            <select class="person-seniority w-full border rounded p-1.5 text-sm" multiple>
-                                <option value="Entry">Entry</option>
-                                <option value="Senior">Senior</option>
-                                <option value="Intern">Intern</option>
-                                <option value="Manager">Manager</option>
-                                <option value="Director">Director</option>
-                                <option value="Vice President">Vice President</option>
-                                <option value="C-Suite">C-Suite</option>
-                            </select>
-                        </div>
-                        <div class="md:col-span-2">
-                            <label class="block text-xs font-medium text-gray-600 mb-1">Job Title Contains (optional)</label>
-                            <input type="text" class="person-title w-full border rounded p-1.5 text-sm" placeholder="e.g., Account Executive">
-                        </div>
-                    </div>
-                </div>
-            `;
-            container.insertAdjacentHTML('beforeend', html);
-            personFilterIndex++;
-            lucide.createIcons();
-        }
-        
-        function removePersonFilter(index) {
-            const block = document.querySelector(`.person-filter-block[data-index="${index}"]`);
-            if (block) block.remove();
-        }
-        
+        // ========== Preview with elevated counts + sample companies tab ==========
         async function runPreview() {
             const panel = document.getElementById('preview_panel');
             const content = document.getElementById('preview_content');
@@ -379,21 +473,15 @@
                     return;
                 }
                 
-                let html = `<div class="space-y-4">`;
+                let html = '<div class="space-y-3">';
                 
                 // Warning for >25k results
                 if (data.exceeds_limit) {
                     html += `
                         <div class="bg-red-50 border border-red-200 p-3 rounded">
-                            <p class="text-sm font-semibold text-red-800 flex items-center gap-1">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                                </svg>
-                                Exceeds 25,000 limit
-                            </p>
-                            <p class="text-xs text-red-700 mt-1">This query returns more results than Prospeo's pagination limit. Consider adding more filters to narrow results.</p>
-                        </div>
-                    `;
+                            <p class="text-sm font-semibold text-red-800">Exceeds 25,000 limit</p>
+                            <p class="text-xs text-red-700 mt-1">Add more filters to narrow results.</p>
+                        </div>`;
                 }
                 
                 // Existing data notice
@@ -402,61 +490,49 @@
                         <div class="bg-green-50 border border-green-200 p-3 rounded">
                             <p class="text-sm font-semibold text-green-800">Existing data found!</p>
                             <p class="text-xs text-green-700 mt-1">
-                                This query was run before: <strong>${data.existing_data.job_name}</strong><br>
-                                Found <strong>${data.existing_data.company_count.toLocaleString()}</strong> companies in database.
-                                <a href="/results/${data.existing_data.job_id}" class="underline">View results →</a>
+                                <strong>${data.existing_data.job_name}</strong> — ${data.existing_data.company_count.toLocaleString()} companies
+                                <a href="/results/${data.existing_data.job_id}" class="underline ml-1">View →</a>
                             </p>
-                        </div>
-                    `;
+                        </div>`;
                 }
                 
+                // Elevated stat cards: Companies + Aggregate Person Counts
+                html += '<div class="grid grid-cols-2 gap-2">';
                 html += `
-                        <div class="bg-blue-50 p-3 rounded">
-                            <p class="text-2xl font-bold text-blue-900">${data.company_count.toLocaleString()}</p>
-                            <p class="text-sm text-blue-700">companies found</p>
-                        </div>
-                        
-                        <div class="bg-yellow-50 p-3 rounded">
-                            <p class="text-lg font-semibold text-yellow-900">${data.estimated_credits.toLocaleString()} credits</p>
-                            <p class="text-xs text-yellow-700">
-                                ${data.credit_breakdown.company_search} (companies) + 
-                                ${data.credit_breakdown.person_searches} (people)
-                            </p>
-                        </div>
-                        
-                        <div>
-                            <p class="text-sm font-medium mb-2">Sample Companies:</p>
-                            <ul class="text-sm space-y-1">
-                `;
+                    <div class="stat-card rounded-lg p-3 text-center">
+                        <p class="text-2xl font-bold text-indigo-900">${data.company_count.toLocaleString()}</p>
+                        <p class="text-xs text-indigo-700 font-medium">Companies Found</p>
+                    </div>`;
                 
-                data.sample_companies.forEach(c => {
-                    html += `<li class="text-gray-700">• ${c.name} (${c.industry || 'N/A'})</li>`;
-                });
-                
-                html += '</ul></div>';
-                
-                if (data.person_preview) {
-                    html += `
-                        <div>
-                            <p class="text-sm font-medium mb-2">${data.person_preview.query_name} at ${data.person_preview.company_name}:</p>
-                            <p class="text-sm text-gray-600">${data.person_preview.total_count} people found</p>
-                            <ul class="text-sm space-y-1 mt-1">
-                    `;
-                    data.person_preview.sample_people.forEach(p => {
-                        html += `<li class="text-gray-700">• ${p.name} - ${p.title || 'N/A'}</li>`;
-                    });
-                    html += '</ul></div>';
-                }
-                
-                // Show aggregate person counts
                 if (data.aggregate_person_counts) {
-                    html += '<div class="border-t pt-3 mt-3"><p class="text-sm font-medium mb-2">Aggregate Person Counts (Quick TAM):</p><ul class="text-sm space-y-1">';
                     for (const [name, count] of Object.entries(data.aggregate_person_counts)) {
                         if (!name.includes('_sample_countries')) {
-                            html += `<li class="text-gray-700">• <strong>${name}:</strong> ${count.toLocaleString()} people</li>`;
+                            html += `
+                                <div class="stat-card-green rounded-lg p-3 text-center">
+                                    <p class="text-2xl font-bold text-emerald-900">${count.toLocaleString()}</p>
+                                    <p class="text-xs text-emerald-700 font-medium">${name}</p>
+                                </div>`;
                         }
                     }
-                    html += '</ul></div>';
+                }
+                html += '</div>';
+                
+                // Credits
+                html += `
+                    <div class="bg-yellow-50 p-3 rounded">
+                        <p class="text-sm font-semibold text-yellow-900">${data.estimated_credits.toLocaleString()} credits (detailed)</p>
+                        <p class="text-xs text-yellow-700">
+                            ${data.credit_breakdown.company_search} (companies) + 
+                            ${data.credit_breakdown.person_searches} (people)
+                        </p>
+                    </div>`;
+                
+                // Sample companies button (links to tab)
+                if (data.sample_companies && data.sample_companies.length) {
+                    html += `
+                        <button onclick="switchTab('samples')" class="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium py-2 rounded border border-indigo-200 flex items-center justify-center gap-1">
+                            View ${data.sample_companies.length} Sample Companies →
+                        </button>`;
                 }
                 
                 html += '</div>';
@@ -468,7 +544,9 @@
                     document.getElementById('detailed_credits').textContent = `~${data.credits.detailed.toLocaleString()} credits`;
                 }
                 
-                // Save for use in startJob
+                // Populate sample companies tab
+                populateSamplesTable(data.sample_companies || []);
+                
                 lastPreviewData = data;
                 
             } catch (err) {
@@ -476,53 +554,67 @@
             }
         }
         
-        let lastPreviewData = null;
+        // ========== Populate Sample Companies Table ==========
+        function populateSamplesTable(companies) {
+            const empty = document.getElementById('samples_empty');
+            const wrap = document.getElementById('samples_table_wrap');
+            const tbody = document.getElementById('samples_table_body');
+            
+            if (!companies.length) {
+                empty.classList.remove('hidden');
+                wrap.classList.add('hidden');
+                return;
+            }
+            
+            empty.classList.add('hidden');
+            wrap.classList.remove('hidden');
+            tbody.innerHTML = '';
+            
+            companies.forEach(c => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50';
+                tr.innerHTML = `
+                    <td class="px-4 py-3 font-medium">${esc(c.name || '')}</td>
+                    <td class="px-4 py-3 text-gray-600">${esc(c.industry || '-')}</td>
+                    <td class="px-4 py-3 text-gray-600">${c.headcount ? c.headcount.toLocaleString() : '-'}</td>
+                    <td class="px-4 py-3 text-gray-600">${esc(c.country || '-')}</td>
+                    <td class="px-4 py-3 text-gray-600">${esc(c.city || '-')}</td>
+                    <td class="px-4 py-3 text-gray-600">${esc(c.revenue || '-')}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            // Show badge on tab
+            document.getElementById('tab-btn-samples').innerHTML = `Sample Companies <span class="ml-1 bg-indigo-100 text-indigo-700 text-xs px-1.5 py-0.5 rounded-full">${companies.length}</span>`;
+        }
         
+        function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+        
+        // ========== Search Mode + Start Job ==========
         function getSelectedMode() {
             return document.querySelector('input[name="search_mode"]:checked').value;
         }
         
         async function startJob() {
-            // First run a preview to check limits
             const companyFilters = getCompanyFilters();
             const personFilters = getPersonFilters();
             
             try {
-                // Quick check if we have recent preview data, otherwise fetch
                 if (!lastPreviewData) {
                     const previewResponse = await fetch('/api/preview', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            company_filters: companyFilters,
-                            person_filters: personFilters
-                        })
+                        body: JSON.stringify({ company_filters: companyFilters, person_filters: personFilters })
                     });
                     lastPreviewData = await previewResponse.json();
                 }
                 
-                // Check for >25k warning
                 if (lastPreviewData.exceeds_limit) {
-                    const confirmed = confirm(
-                        `⚠️ WARNING: This query returns ${lastPreviewData.company_count.toLocaleString()} companies, ` +
-                        `which exceeds Prospeo's 25,000 result limit.\n\n` +
-                        `Only the first 25,000 companies will be retrieved.\n` +
-                        `Estimated credits: ${lastPreviewData.estimated_credits.toLocaleString()}\n\n` +
-                        `Do you want to proceed anyway?`
-                    );
-                    if (!confirmed) return;
+                    if (!confirm(`Warning: ${lastPreviewData.company_count.toLocaleString()} companies exceeds 25K limit. Proceed?`)) return;
                 }
                 
-                // Check for existing data
                 if (lastPreviewData.existing_data) {
-                    const useExisting = confirm(
-                        `This query was already run before!\n\n` +
-                        `Job: "${lastPreviewData.existing_data.job_name}"\n` +
-                        `Companies found: ${lastPreviewData.existing_data.company_count.toLocaleString()}\n\n` +
-                        `Click OK to run a new search (uses credits)\n` +
-                        `Click Cancel to view existing results instead`
-                    );
-                    if (!useExisting) {
+                    if (!confirm(`Already run before: "${lastPreviewData.existing_data.job_name}" (${lastPreviewData.existing_data.company_count.toLocaleString()} cos). OK=new search, Cancel=view existing`)) {
                         window.location.href = `/results/${lastPreviewData.existing_data.job_id}`;
                         return;
                     }
@@ -535,12 +627,7 @@
                 const response = await fetch('/api/jobs', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: jobName,
-                        company_filters: companyFilters,
-                        person_filters: personFilters,
-                        mode: mode
-                    })
+                    body: JSON.stringify({ name: jobName, company_filters: companyFilters, person_filters: personFilters, mode: mode })
                 });
                 
                 const job = await response.json();
@@ -550,6 +637,10 @@
                 alert('Error starting job: ' + err.message);
             }
         }
+        
+        // ========== Init on page load ==========
+        initCompanyWidgets();
+        addPersonFilter('SDR Count');
     </script>
 </body>
 </html>

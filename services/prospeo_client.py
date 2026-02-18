@@ -90,6 +90,16 @@ class ProspeoClient:
             "total_count": pagination.get("total_count", 0)
         }
 
+    def search_suggestions(self, location=None, job_title=None):
+        payload = {}
+        if location is not None:
+            payload["location_search"] = location
+        elif job_title is not None:
+            payload["job_title_search"] = job_title
+        else:
+            return {"error": True, "error_code": "MISSING_PARAM"}
+        return self._post("/search-suggestions", payload)
+
     def is_error(self, response):
         return (
             response.get("_http_status", 200) >= 400 or

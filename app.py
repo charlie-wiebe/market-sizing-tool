@@ -47,6 +47,27 @@ def health():
     return jsonify({"status": "ok"})
 
 
+@app.route("/api/suggestions", methods=["POST"])
+def suggestions():
+    data = request.json or {}
+    location = data.get("location")
+    job_title = data.get("job_title")
+    
+    if not location and not job_title:
+        return jsonify({"error": True, "message": "Provide location or job_title"}), 400
+    
+    result = client.search_suggestions(location=location, job_title=job_title)
+    
+    if client.is_error(result):
+        return jsonify({"error": True, "message": "Suggestions lookup failed"}), 400
+    
+    return jsonify({
+        "error": False,
+        "location_suggestions": result.get("location_suggestions"),
+        "job_title_suggestions": result.get("job_title_suggestions")
+    })
+
+
 @app.route("/api/preview", methods=["POST"])
 def preview():
     data = request.json
@@ -86,14 +107,19 @@ def preview():
     companies = client.extract_companies(response)
     
     sample_companies = []
-    for c in companies[:5]:
+    for c in companies[:25]:
         domain = c.get("domain") or c.get("website") or ""
+        loc = c.get("location") if isinstance(c.get("location"), dict) else {}
         sample_companies.append({
             "name": c.get("name"),
             "domain": domain,
             "industry": c.get("industry"),
             "headcount": c.get("headcount"),
-            "location": c.get("location", {}).get("country") if isinstance(c.get("location"), dict) else None
+            "country": loc.get("country"),
+            "city": loc.get("city"),
+            "state": loc.get("state"),
+            "revenue": c.get("revenue_range") or c.get("revenue"),
+            "linkedin_url": c.get("linkedin_url"),
         })
     
     person_preview = None
