@@ -182,13 +182,13 @@ def preview():
     exceeds_limit = total_companies > 25000
     
     # Aggregate person counts (Quick TAM mode)
+    # NOTE: /search-person only supports person_* filters, NOT company_* filters.
+    # Company filters (company_location_search, company_attributes, company_headcount_by_department)
+    # are invalid for /search-person and cause 0 results.
     aggregate_person_counts = {}
     for person_config in person_filters:
         query_name = person_config.get("name", "Unnamed Query")
         p_filters = dict(person_config.get("filters", {}))
-        
-        # Merge company filters into person search
-        p_filters.update(company_filters)
         
         logger.info("=== PREVIEW: Person Search [%s] ===", query_name)
         logger.info(json.dumps({"endpoint": "/search-person", "payload": {"page": 1, "filters": p_filters}}, indent=2))
@@ -295,9 +295,6 @@ def run_quick_tam_job(job):
             query_name = person_config.get("name", "Unnamed Query")
             p_filters = dict(person_config.get("filters", {}))
             
-            # Merge company filters into person search
-            p_filters.update(job.company_filters)
-            
             logger.info("=== JOB %d: Person Search [%s] ===", job.id, query_name)
             logger.info(json.dumps({"endpoint": "/search-person", "payload": {"page": 1, "filters": p_filters}}, indent=2))
             
@@ -308,6 +305,7 @@ def run_quick_tam_job(job):
                 p_pagination = client.get_pagination(p_response)
                 aggregate_results[query_name] = p_pagination["total_count"]
             else:
+                logger.warning("Person search failed for [%s]: %s", query_name, client.get_error_code(p_response))
                 aggregate_results[query_name] = 0
         
         job.aggregate_results = aggregate_results
@@ -387,45 +385,62 @@ def get_job_results(job_id):
 def export_job(job_id):
     job = Job.query.get_or_404(job_id)
     
-    companies = Company.query.filter_by(job_id=job_id).all()
-    
-    person_query_names = set()
-    for pf in (job.person_filters or []):
-        person_query_names.add(pf.get("name", "Unnamed Query"))
-    
     output = io.StringIO()
     writer = csv.writer(output)
     
-    headers = [
-        "company_id", "name", "domain", "website", "industry", 
-        "headcount", "country", "city", "state", 
-        "founded_year", "funding_stage", "revenue_range", "b2b"
-    ]
-    headers.extend(sorted(person_query_names))
-    writer.writerow(headers)
-    
-    for company in companies:
-        person_counts = {pc.query_name: pc.total_count for pc in company.person_counts}
+    if job.mode == 'quick_tam':
+        # Quick TAM: export aggregate results
+        writer.writerow(["Metric", "Value"])
+        writer.writerow(["Job Name", job.name])
+        writer.writerow(["Mode", "Quick TAM Estimate"])
+        writer.writerow(["Total Companies", job.total_companies])
+        writer.writerow([])
         
-        row = [
-            company.prospeo_company_id,
-            company.name,
-            company.domain,
-            company.website,
-            company.industry,
-            company.headcount,
-            company.location_country,
-            company.location_city,
-            company.location_state,
-            company.founded_year,
-            company.funding_stage,
-            company.revenue_range,
-            company.b2b
+        writer.writerow(["Person Search", "Aggregate Count"])
+        for query_name, count in (job.aggregate_results or {}).items():
+            writer.writerow([query_name, count])
+        
+        writer.writerow([])
+        writer.writerow(["Credits Used", job.actual_credits])
+        writer.writerow(["Completed At", job.completed_at.isoformat() if job.completed_at else ""])
+    else:
+        # Detailed mode: export per-company data
+        companies = Company.query.filter_by(job_id=job_id).all()
+        
+        person_query_names = set()
+        for pf in (job.person_filters or []):
+            person_query_names.add(pf.get("name", "Unnamed Query"))
+        
+        headers = [
+            "company_id", "name", "domain", "website", "industry", 
+            "headcount", "country", "city", "state", 
+            "founded_year", "funding_stage", "revenue_range", "b2b"
         ]
-        for qn in sorted(person_query_names):
-            row.append(person_counts.get(qn, 0))
+        headers.extend(sorted(person_query_names))
+        writer.writerow(headers)
         
-        writer.writerow(row)
+        for company in companies:
+            person_counts = {pc.query_name: pc.total_count for pc in company.person_counts}
+            
+            row = [
+                company.prospeo_company_id,
+                company.name,
+                company.domain,
+                company.website,
+                company.industry,
+                company.headcount,
+                company.location_country,
+                company.location_city,
+                company.location_state,
+                company.founded_year,
+                company.funding_stage,
+                company.revenue_range,
+                company.b2b
+            ]
+            for qn in sorted(person_query_names):
+                row.append(person_counts.get(qn, 0))
+            
+            writer.writerow(row)
     
     output.seek(0)
     
