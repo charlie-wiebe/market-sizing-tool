@@ -400,9 +400,11 @@
                 const name = block.querySelector('.person-query-name').value || 'Unnamed Query';
                 const filterObj = {};
                 
-                // Department (include/exclude)
+                // Department (include/exclude — Prospeo rejects both at once)
                 const deptVals = widgets.dept.getValues();
-                if (deptVals.include.length || deptVals.exclude.length) {
+                if (deptVals.include.length && deptVals.exclude.length) {
+                    filterObj.person_department = { include: deptVals.include };
+                } else if (deptVals.include.length || deptVals.exclude.length) {
                     filterObj.person_department = deptVals;
                 }
                 
@@ -621,7 +623,7 @@
                         return;
                     }
                 }
-                const jobName = prompt('Enter job name:', `Market Sizing ${new Date().toLocaleDateString()}`);
+                const jobName = prompt('Enter job name:', `Market Sizing ${new Date().toLocaleString()}`);
                 if (!jobName) return;
                 
                 const response = await fetch('/api/jobs', {

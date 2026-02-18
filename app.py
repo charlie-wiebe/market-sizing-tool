@@ -190,6 +190,11 @@ def preview():
         # Merge company filters into person search (valid per Prospeo docs)
         p_filters.update(company_filters)
         
+        # Prospeo rejects include+exclude simultaneously on person_department
+        dept = p_filters.get("person_department")
+        if isinstance(dept, dict) and dept.get("include") and dept.get("exclude"):
+            p_filters["person_department"] = {"include": dept["include"]}
+        
         logger.info("=== PREVIEW: Person Search [%s] ===", query_name)
         logger.info(json.dumps({"endpoint": "/search-person", "payload": {"page": 1, "filters": p_filters}}, indent=2))
         
@@ -308,6 +313,11 @@ def run_quick_tam_job(job):
             
             # Merge company filters into person search (valid per Prospeo docs)
             p_filters.update(job.company_filters)
+            
+            # Prospeo rejects include+exclude simultaneously on person_department
+            dept = p_filters.get("person_department")
+            if isinstance(dept, dict) and dept.get("include") and dept.get("exclude"):
+                p_filters["person_department"] = {"include": dept["include"]}
             
             logger.info("=== JOB %d: Person Search [%s] ===", job.id, query_name)
             logger.info(json.dumps({"endpoint": "/search-person", "payload": {"page": 1, "filters": p_filters}}, indent=2))
