@@ -446,32 +446,109 @@ def export_job(job_id):
         for pf in (job.person_filters or []):
             person_query_names.add(pf.get("name", "Unnamed Query"))
         
+        # Comprehensive headers with all Prospeo fields
         headers = [
-            "company_id", "name", "domain", "website", "industry", 
-            "headcount", "country", "city", "state", 
-            "founded_year", "funding_stage", "revenue_range", "b2b"
+            # Core fields
+            "prospeo_company_id", "name", "domain", "website", "root_domain",
+            
+            # Extended company information  
+            "description", "description_seo", "description_ai", "company_type", "employee_range",
+            "logo_url",
+            
+            # Business details
+            "industry", "headcount", "founded_year", "funding_stage",
+            
+            # Location details
+            "location_country", "location_city", "location_state", "location_country_code", 
+            "location_raw_address",
+            
+            # Social media URLs
+            "linkedin_url", "twitter_url", "facebook_url", "crunchbase_url", 
+            "instagram_url", "youtube_url",
+            
+            # Revenue information
+            "revenue_range", "revenue_min", "revenue_max", "revenue_printed",
+            
+            # Attribute flags
+            "b2b", "has_demo", "has_free_trial", "has_downloadable", 
+            "has_mobile_apps", "has_online_reviews", "has_pricing",
+            
+            # Classification
+            "linkedin_id"
         ]
+        
+        # Add person query columns
         headers.extend(sorted(person_query_names))
         writer.writerow(headers)
         
         for company in companies:
             person_counts = {pc.query_name: pc.total_count for pc in company.person_counts}
             
+            # Helper function to serialize JSON fields for CSV
+            def serialize_json(value):
+                if value is None:
+                    return ""
+                if isinstance(value, (dict, list)):
+                    return str(value).replace(',', ';')  # Replace commas to avoid CSV issues
+                return str(value)
+            
             row = [
-                company.prospeo_company_id,
-                company.name,
-                company.domain,
-                company.website,
-                company.industry,
-                company.headcount,
-                company.location_country,
-                company.location_city,
-                company.location_state,
-                company.founded_year,
-                company.funding_stage,
-                company.revenue_range,
-                company.b2b
+                # Core fields
+                company.prospeo_company_id or "",
+                company.name or "",
+                company.domain or "",
+                company.website or "",
+                company.root_domain or "",
+                
+                # Extended company information
+                (company.description or "")[:500] if company.description else "",  # Truncate long descriptions
+                (company.description_seo or "")[:200] if company.description_seo else "",
+                (company.description_ai or "")[:200] if company.description_ai else "",
+                company.company_type or "",
+                company.employee_range or "",
+                company.logo_url or "",
+                
+                # Business details
+                company.industry or "",
+                company.headcount or "",
+                company.founded_year or "",
+                company.funding_stage or "",
+                
+                # Location details
+                company.location_country or "",
+                company.location_city or "",
+                company.location_state or "",
+                company.location_country_code or "",
+                company.location_raw_address or "",
+                
+                # Social media URLs
+                company.linkedin_url or "",
+                company.twitter_url or "",
+                company.facebook_url or "",
+                company.crunchbase_url or "",
+                company.instagram_url or "",
+                company.youtube_url or "",
+                
+                # Revenue information
+                company.revenue_range or "",
+                company.revenue_min or "",
+                company.revenue_max or "",
+                company.revenue_printed or "",
+                
+                # Attribute flags
+                company.b2b if company.b2b is not None else "",
+                company.has_demo if company.has_demo is not None else "",
+                company.has_free_trial if company.has_free_trial is not None else "",
+                company.has_downloadable if company.has_downloadable is not None else "",
+                company.has_mobile_apps if company.has_mobile_apps is not None else "",
+                company.has_online_reviews if company.has_online_reviews is not None else "",
+                company.has_pricing if company.has_pricing is not None else "",
+                
+                # Classification
+                company.linkedin_id or ""
             ]
+            
+            # Add person count columns
             for qn in sorted(person_query_names):
                 row.append(person_counts.get(qn, 0))
             
