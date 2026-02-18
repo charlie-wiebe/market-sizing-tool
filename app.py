@@ -182,18 +182,29 @@ def preview():
     exceeds_limit = total_companies > 25000
     
     # Aggregate person counts (Quick TAM mode)
-    # NOTE: /search-person only supports person_* filters, NOT company_* filters.
-    # Company filters (company_location_search, company_attributes, company_headcount_by_department)
-    # are invalid for /search-person and cause 0 results.
     aggregate_person_counts = {}
     for person_config in person_filters:
         query_name = person_config.get("name", "Unnamed Query")
         p_filters = dict(person_config.get("filters", {}))
         
+        # Merge company filters into person search (valid per Prospeo docs)
+        p_filters.update(company_filters)
+        
         logger.info("=== PREVIEW: Person Search [%s] ===", query_name)
         logger.info(json.dumps({"endpoint": "/search-person", "payload": {"page": 1, "filters": p_filters}}, indent=2))
         
         p_response = client.search_people(p_filters, page=1)
+        
+        # Log the raw response for debugging
+        logger.info("=== PREVIEW: Person Search [%s] RESPONSE ===", query_name)
+        logger.info(json.dumps({
+            "http_status": p_response.get("_http_status"),
+            "error": p_response.get("error"),
+            "error_code": p_response.get("error_code"),
+            "filter_error": p_response.get("filter_error"),
+            "pagination": p_response.get("pagination"),
+            "result_count": len(p_response.get("results") or [])
+        }, indent=2))
         
         if not client.is_error(p_response):
             p_pagination = client.get_pagination(p_response)
@@ -295,11 +306,25 @@ def run_quick_tam_job(job):
             query_name = person_config.get("name", "Unnamed Query")
             p_filters = dict(person_config.get("filters", {}))
             
+            # Merge company filters into person search (valid per Prospeo docs)
+            p_filters.update(job.company_filters)
+            
             logger.info("=== JOB %d: Person Search [%s] ===", job.id, query_name)
             logger.info(json.dumps({"endpoint": "/search-person", "payload": {"page": 1, "filters": p_filters}}, indent=2))
             
             p_response = client.search_people(p_filters, page=1)
             credits_used += 1
+            
+            # Log response for debugging
+            logger.info("=== JOB %d: Person Search [%s] RESPONSE ===", job.id, query_name)
+            logger.info(json.dumps({
+                "http_status": p_response.get("_http_status"),
+                "error": p_response.get("error"),
+                "error_code": p_response.get("error_code"),
+                "filter_error": p_response.get("filter_error"),
+                "pagination": p_response.get("pagination"),
+                "result_count": len(p_response.get("results") or [])
+            }, indent=2))
             
             if not client.is_error(p_response):
                 p_pagination = client.get_pagination(p_response)
