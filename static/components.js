@@ -70,11 +70,13 @@ class CheckboxMultiSelect {
             cb.type = 'checkbox';
             cb.checked = this.selected.has(opt);
             cb.className = 'rounded';
-            cb.addEventListener('change', () => {
+            cb.addEventListener('change', (e) => {
+                e.stopPropagation(); // Prevent event bubbling
                 if (cb.checked) this.selected.add(opt);
                 else this.selected.delete(opt);
                 this.updateTrigger();
                 if (this.onChange) this.onChange(this.getSelected());
+                // Don't close dropdown - keep it open for multiple selections
             });
             label.appendChild(cb);
             label.appendChild(document.createTextNode(opt));
@@ -231,13 +233,14 @@ class IncludeExcludeSelect {
                 pcb.type = 'checkbox';
                 pcb.checked = currentSet.has(group.name);
                 pcb.className = 'rounded';
-                pcb.addEventListener('change', () => {
+                pcb.addEventListener('change', (e) => {
+                    e.stopPropagation(); // Prevent event bubbling
                     if (pcb.checked) {
                         currentSet.add(group.name);
                     } else {
                         currentSet.delete(group.name);
                     }
-                    this.render();
+                    this.updateTagsDisplay();
                     if (this.onChange) this.onChange(this.getValues());
                 });
                 parentLabel.appendChild(pcb);
@@ -268,10 +271,11 @@ class IncludeExcludeSelect {
                     ccb.type = 'checkbox';
                     ccb.checked = currentSet.has(child);
                     ccb.className = 'rounded';
-                    ccb.addEventListener('change', () => {
+                    ccb.addEventListener('change', (e) => {
+                        e.stopPropagation(); // Prevent event bubbling
                         if (ccb.checked) currentSet.add(child);
                         else currentSet.delete(child);
-                        this.render();
+                        this.updateTagsDisplay();
                         if (this.onChange) this.onChange(this.getValues());
                     });
                     cl.appendChild(ccb);
@@ -292,15 +296,37 @@ class IncludeExcludeSelect {
                 cb.type = 'checkbox';
                 cb.checked = currentSet.has(opt);
                 cb.className = 'rounded';
-                cb.addEventListener('change', () => {
+                cb.addEventListener('change', (e) => {
+                    e.stopPropagation(); // Prevent event bubbling
                     if (cb.checked) currentSet.add(opt);
                     else currentSet.delete(opt);
-                    this.render();
+                    this.updateTagsDisplay();
                     if (this.onChange) this.onChange(this.getValues());
                 });
                 label.appendChild(cb);
                 label.appendChild(document.createTextNode(opt));
                 this.itemsEl.appendChild(label);
+            });
+        }
+    }
+
+    updateTagsDisplay() {
+        // Update only the tags display without re-rendering the entire component
+        const tagsDiv = this.container.querySelector('.flex.flex-wrap.gap-1.mb-1.min-h-\\[24px\\]');
+        if (tagsDiv) {
+            tagsDiv.innerHTML = '';
+            const currentSet = this.activeTab === 'include' ? this.includeSet : this.excludeSet;
+            const tagColor = this.activeTab === 'include' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+            currentSet.forEach(val => {
+                const tag = document.createElement('span');
+                tag.className = `inline-flex items-center gap-1 ${tagColor} text-xs px-2 py-0.5 rounded`;
+                tag.innerHTML = `${this.escHtml(val)}<button type="button" class="hover:opacity-70">&times;</button>`;
+                tag.querySelector('button').addEventListener('click', () => {
+                    currentSet.delete(val);
+                    this.updateTagsDisplay();
+                    if (this.onChange) this.onChange(this.getValues());
+                });
+                tagsDiv.appendChild(tag);
             });
         }
     }

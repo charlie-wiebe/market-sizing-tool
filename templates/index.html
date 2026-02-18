@@ -335,6 +335,25 @@
             
             personBlocks[idx] = { dept: deptWidget, seniority: seniorityWidget, jobTitle: jobTitleWidget, location: locationWidget, timeRole: timeRoleWidget, timeCompany: timeCompanyWidget };
             
+            // Setup auto-save for new person filter widgets
+            const debouncedSave = () => {
+                clearTimeout(window.saveTimeout);
+                window.saveTimeout = setTimeout(saveFormState, 1000);
+            };
+            
+            // Add auto-save to each widget
+            [deptWidget, seniorityWidget, jobTitleWidget, locationWidget, timeRoleWidget, timeCompanyWidget].forEach(widget => {
+                if (widget && widget.onChange) {
+                    const originalOnChange = widget.onChange;
+                    widget.onChange = (...args) => {
+                        if (originalOnChange) originalOnChange(...args);
+                        debouncedSave();
+                    };
+                } else if (widget) {
+                    widget.onChange = debouncedSave;
+                }
+            });
+            
             lucide.createIcons();
         }
         
@@ -640,9 +659,159 @@
             }
         }
         
+        // ========== State Persistence ==========
+        function saveFormState() {
+            const state = {
+                companyFilters: getCompanyFilters(),
+                personFilters: getPersonFilters(),
+                searchMode: getSelectedMode(),
+                companyKeywords: document.getElementById('company_keywords').value,
+                companyB2B: document.getElementById('company_b2b').value
+            };
+            localStorage.setItem('marketSizingFormState', JSON.stringify(state));
+        }
+        
+        function loadFormState() {
+            try {
+                const saved = localStorage.getItem('marketSizingFormState');
+                if (!saved) return false;
+                
+                const state = JSON.parse(saved);
+                
+                // Restore company filters
+                if (state.companyFilters) {
+                    if (state.companyFilters.company_location_search) {
+                        companyLocationWidget.includeValues = state.companyFilters.company_location_search.include || [];
+                        companyLocationWidget.excludeValues = state.companyFilters.company_location_search.exclude || [];
+                        companyLocationWidget.render();
+                    }
+                    
+                    if (state.companyFilters.company_headcount_range) {
+                        companyHeadcountWidget.setSelected(state.companyFilters.company_headcount_range);
+                    }
+                    
+                    if (state.companyFilters.company_industry) {
+                        companyIndustryWidget.setSelected(state.companyFilters.company_industry.include || []);
+                    }
+                    
+                    if (state.companyFilters.company_headcount_by_department) {
+                        companyHcByDeptWidget.rules = state.companyFilters.company_headcount_by_department;
+                        companyHcByDeptWidget.render();
+                    }
+                }
+                
+                // Restore simple form fields
+                if (state.companyKeywords) {
+                    document.getElementById('company_keywords').value = state.companyKeywords;
+                }
+                if (state.companyB2B) {
+                    document.getElementById('company_b2b').value = state.companyB2B;
+                }
+                
+                // Restore search mode
+                if (state.searchMode) {
+                    const modeRadio = document.querySelector(`input[name="search_mode"][value="${state.searchMode}"]`);
+                    if (modeRadio) modeRadio.checked = true;
+                }
+                
+                // Restore person filters
+                if (state.personFilters && state.personFilters.length > 0) {
+                    // Clear default person filter first
+                    document.getElementById('person_filters_container').innerHTML = '';
+                    personFilterIndex = 0;
+                    
+                    state.personFilters.forEach(pf => {
+                        addPersonFilter(pf.name);
+                        const idx = personFilterIndex - 1;
+                        const widgets = personBlocks[idx];
+                        
+                        if (widgets && pf.filters) {
+                            // Restore department
+                            if (pf.filters.person_department) {
+                                widgets.dept.includeSet = new Set(pf.filters.person_department.include || []);
+                                widgets.dept.excludeSet = new Set(pf.filters.person_department.exclude || []);
+                            }
+                            
+                            // Restore seniority
+                            if (pf.filters.person_seniority) {
+                                widgets.seniority.includeSet = new Set(pf.filters.person_seniority.include || []);
+                                widgets.seniority.excludeSet = new Set(pf.filters.person_seniority.exclude || []);
+                            }
+                            
+                            // Restore location
+                            if (pf.filters.person_location_search) {
+                                widgets.location.includeValues = pf.filters.person_location_search.include || [];
+                                widgets.location.excludeValues = pf.filters.person_location_search.exclude || [];
+                            }
+                            
+                            // Restore job title
+                            if (pf.filters.person_job_title) {
+                                if (pf.filters.person_job_title.boolean_search) {
+                                    widgets.jobTitle.mode = 'boolean';
+                                    widgets.jobTitle.booleanExpr = pf.filters.person_job_title.boolean_search;
+                                } else {
+                                    widgets.jobTitle.mode = 'standard';
+                                    widgets.jobTitle.includeValues = pf.filters.person_job_title.include || [];
+                                    widgets.jobTitle.excludeValues = pf.filters.person_job_title.exclude || [];
+                                    widgets.jobTitle.matchExact = pf.filters.person_job_title.match_only_exact_job_titles || false;
+                                }
+                            }
+                            
+                            // Re-render all widgets to show restored state
+                            Object.values(widgets).forEach(widget => {
+                                if (widget.render) widget.render();
+                            });
+                        }
+                    });
+                }
+                
+                return true;
+            } catch (e) {
+                console.warn('Failed to load form state:', e);
+                return false;
+            }
+        }
+        
+        // Auto-save form state when changes are made
+        function setupAutoSave() {
+            // Save on form changes with debounce
+            let saveTimeout;
+            const debouncedSave = () => {
+                clearTimeout(saveTimeout);
+                saveTimeout = setTimeout(saveFormState, 1000);
+            };
+            
+            // Listen for changes on various form elements
+            document.getElementById('company_keywords').addEventListener('input', debouncedSave);
+            document.getElementById('company_b2b').addEventListener('change', debouncedSave);
+            document.querySelectorAll('input[name="search_mode"]').forEach(radio => {
+                radio.addEventListener('change', debouncedSave);
+            });
+            
+            // Save when widgets change (handled by onChange callbacks)
+            const originalOnChange = (widget, originalCallback) => {
+                return (...args) => {
+                    if (originalCallback) originalCallback(...args);
+                    debouncedSave();
+                };
+            };
+            
+            // Override widget onChange callbacks to include auto-save
+            if (companyLocationWidget) companyLocationWidget.onChange = originalOnChange(companyLocationWidget, companyLocationWidget.onChange);
+            if (companyHeadcountWidget) companyHeadcountWidget.onChange = originalOnChange(companyHeadcountWidget, companyHeadcountWidget.onChange);
+            if (companyIndustryWidget) companyIndustryWidget.onChange = originalOnChange(companyIndustryWidget, companyIndustryWidget.onChange);
+            if (companyHcByDeptWidget) companyHcByDeptWidget.onChange = originalOnChange(companyHcByDeptWidget, companyHcByDeptWidget.onChange);
+        }
+
         // ========== Init on page load ==========
         initCompanyWidgets();
-        addPersonFilter('SDR Count');
+        
+        // Try to load saved state, otherwise add default person filter
+        if (!loadFormState()) {
+            addPersonFilter('SDR Count');
+        }
+        
+        setupAutoSave();
     </script>
 </body>
 </html>
