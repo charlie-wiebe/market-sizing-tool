@@ -1,4 +1,6 @@
 import os
+import json
+import logging
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, Response
 import csv
@@ -13,6 +15,8 @@ from jobs.market_sizing_job import start_job_async
 
 app = Flask(__name__)
 app.config.from_object(Config)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('market-sizing')
 db.init_app(app)
 
 with app.app_context():
@@ -94,9 +98,13 @@ def preview():
             'created_at': latest_job.created_at.isoformat() if latest_job.created_at else None
         }
     
+    logger.info("=== PREVIEW: Company Search ===")
+    logger.info(json.dumps({"endpoint": "/search-company", "payload": {"page": 1, "filters": company_filters}}, indent=2))
+    
     response = client.search_companies(company_filters, page=1)
     
     if client.is_error(response):
+        logger.warning("Company search failed: %s", client.get_error_code(response))
         return jsonify({
             "error": True,
             "error_code": client.get_error_code(response),
@@ -179,6 +187,9 @@ def preview():
         # Merge company filters into person search
         p_filters.update(company_filters)
         
+        logger.info("=== PREVIEW: Person Search [%s] ===", query_name)
+        logger.info(json.dumps({"endpoint": "/search-person", "payload": {"page": 1, "filters": p_filters}}, indent=2))
+        
         p_response = client.search_people(p_filters, page=1)
         
         if not client.is_error(p_response):
@@ -259,6 +270,9 @@ def run_quick_tam_job(job):
     
     try:
         # Get company count
+        logger.info("=== JOB %d: Company Search ===", job.id)
+        logger.info(json.dumps({"endpoint": "/search-company", "payload": {"page": 1, "filters": job.company_filters}}, indent=2))
+        
         response = client.search_companies(job.company_filters, page=1)
         
         if client.is_error(response):
@@ -280,6 +294,9 @@ def run_quick_tam_job(job):
             
             # Merge company filters into person search
             p_filters.update(job.company_filters)
+            
+            logger.info("=== JOB %d: Person Search [%s] ===", job.id, query_name)
+            logger.info(json.dumps({"endpoint": "/search-person", "payload": {"page": 1, "filters": p_filters}}, indent=2))
             
             p_response = client.search_people(p_filters, page=1)
             credits_used += 1
