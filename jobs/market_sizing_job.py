@@ -10,7 +10,7 @@ class MarketSizingJob:
     def __init__(self, job_id):
         self.job_id = job_id
         self.client = ProspeoClient()
-        self.hubspot_client = HubSpotClient()
+        self.hubspot_client = None  # Lazy load to prevent initialization errors from blocking job
         self.segmenter = QuerySegmenter(self.client)
         self._stop_requested = False
 
@@ -245,6 +245,16 @@ class MarketSizingJob:
         
         try:
             logger.info(f"Starting HubSpot enrichment for job {job.id}")
+            
+            # Lazy load HubSpot client to prevent initialization errors from blocking job execution
+            if self.hubspot_client is None:
+                try:
+                    logger.info("Initializing HubSpot client")
+                    self.hubspot_client = HubSpotClient()
+                except Exception as e:
+                    logger.error(f"Failed to initialize HubSpot client: {e}")
+                    logger.info(f"HubSpot enrichment skipped for job {job.id} - client initialization failed")
+                    return
             
             # Get all companies for this job
             companies = Company.query.filter_by(job_id=job.id).all()
