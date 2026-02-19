@@ -18,25 +18,43 @@ class MarketSizingJob:
         self._stop_requested = True
 
     def run(self, app):
-        with app.app_context():
-            job = Job.query.get(self.job_id)
-            if not job:
-                return
-            
-            job.status = 'running'
-            job.started_at = datetime.utcnow()
-            db.session.commit()
-            
-            try:
-                self._execute(job)
-                job.status = 'completed'
-                job.completed_at = datetime.utcnow()
-            except Exception as e:
-                job.status = 'failed'
-                job.error_message = str(e)
-                job.completed_at = datetime.utcnow()
-            
-            db.session.commit()
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"JOB {self.job_id}: Thread started")
+        
+        try:
+            with app.app_context():
+                logger.info(f"JOB {self.job_id}: App context entered")
+                job = Job.query.get(self.job_id)
+                if not job:
+                    logger.error(f"JOB {self.job_id}: Job not found in database")
+                    return
+                
+                logger.info(f"JOB {self.job_id}: Setting status to running")
+                job.status = 'running'
+                job.started_at = datetime.utcnow()
+                db.session.commit()
+                
+                try:
+                    logger.info(f"JOB {self.job_id}: Starting execution")
+                    self._execute(job)
+                    logger.info(f"JOB {self.job_id}: Execution completed successfully")
+                    job.status = 'completed'
+                    job.completed_at = datetime.utcnow()
+                except Exception as e:
+                    logger.error(f"JOB {self.job_id}: Execution failed: {e}")
+                    import traceback
+                    logger.error(f"JOB {self.job_id}: Traceback: {traceback.format_exc()}")
+                    job.status = 'failed'
+                    job.error_message = str(e)
+                    job.completed_at = datetime.utcnow()
+                
+                db.session.commit()
+                logger.info(f"JOB {self.job_id}: Final status: {job.status}")
+        except Exception as e:
+            logger.error(f"JOB {self.job_id}: Thread crashed: {e}")
+            import traceback
+            logger.error(f"JOB {self.job_id}: Thread traceback: {traceback.format_exc()}")
 
     def _execute(self, job):
         plan = self.segmenter.create_execution_plan(job.company_filters)
