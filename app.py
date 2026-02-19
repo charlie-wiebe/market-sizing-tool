@@ -22,17 +22,32 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
     
-    # Run migrations for new columns
+    # Run migrations
     from sqlalchemy import text
     with db.engine.connect() as conn:
-        # Add missing columns if they don't exist
         try:
             conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS query_fingerprint VARCHAR(32)"))
             conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'quick_tam'"))
             conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS aggregate_results JSON"))
-            # Drop bloated columns from person_counts
             for col in ['sample_titles', 'sample_names', 'query_filters']:
                 conn.execute(text(f"ALTER TABLE person_counts DROP COLUMN IF EXISTS {col}"))
+            
+            # Clean up companies table: delete all rows, drop old columns, add new columns
+            conn.execute(text("DELETE FROM hubspot_enrichments"))
+            conn.execute(text("DELETE FROM person_counts"))
+            conn.execute(text("DELETE FROM companies"))
+            
+            # Drop old/renamed columns
+            for col in ['root_domain', 'headcount', 'headcount_by_department', 'founded_year', 
+                         'funding_stage', 'b2b', 'revenue_range', 'revenue_printed', 'processed']:
+                conn.execute(text(f"ALTER TABLE companies DROP COLUMN IF EXISTS {col}"))
+            
+            # Add new columns
+            conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS employee_count INTEGER"))
+            conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS founded INTEGER"))
+            conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_b2b BOOLEAN"))
+            conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS revenue_range_printed VARCHAR(50)"))
+            
             conn.commit()
         except Exception as e:
             print(f"Migration note: {e}")
@@ -467,7 +482,7 @@ def export_job(job_id):
             
             # Basic company information  
             "description", "description_seo", "description_ai", "company_type", 
-            "industry", "headcount", "employee_range", "founded_year", "logo_url",
+            "industry", "employee_count", "employee_range", "founded", "logo_url",
             
             # Location details
             "location_country", "location_city", "location_state", "location_country_code", 
@@ -478,10 +493,10 @@ def export_job(job_id):
             "instagram_url", "youtube_url",
             
             # Revenue information
-            "revenue_min", "revenue_max", "revenue_printed",
+            "revenue_min", "revenue_max", "revenue_range_printed",
             
             # Attributes
-            "b2b", "has_demo", "has_free_trial", "has_downloadable", 
+            "is_b2b", "has_demo", "has_free_trial", "has_downloadable", 
             "has_mobile_apps", "has_online_reviews", "has_pricing",
             
             # Classification
@@ -519,9 +534,9 @@ def export_job(job_id):
                 (company.description_ai or "")[:200] if company.description_ai else "",
                 company.company_type or "",
                 company.industry or "",
-                company.headcount or "",
+                company.employee_count or "",
                 company.employee_range or "",
-                company.founded_year or "",
+                company.founded or "",
                 company.logo_url or "",
                 
                 # Location details
@@ -542,10 +557,10 @@ def export_job(job_id):
                 # Revenue information
                 company.revenue_min or "",
                 company.revenue_max or "",
-                company.revenue_printed or "",
+                company.revenue_range_printed or "",
                 
                 # Attributes
-                company.b2b if company.b2b is not None else "",
+                company.is_b2b if company.is_b2b is not None else "",
                 company.has_demo if company.has_demo is not None else "",
                 company.has_free_trial if company.has_free_trial is not None else "",
                 company.has_downloadable if company.has_downloadable is not None else "",

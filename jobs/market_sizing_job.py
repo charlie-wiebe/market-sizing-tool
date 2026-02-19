@@ -148,29 +148,22 @@ class MarketSizingJob:
 
     def _update_company_fields(self, company, data, root_domain):
         """Update company object with all fields from Prospeo API response."""
-        # Core fields
         company.name = data.get("name") or company.name
-        company.domain = data.get("domain") or company.domain
         company.website = data.get("website") or company.website
-        company.root_domain = root_domain or company.root_domain
-        
-        # Extended company information
+        company.domain = data.get("domain") or company.domain
         company.description = data.get("description") or company.description
         company.description_seo = data.get("description_seo") or company.description_seo
         company.description_ai = data.get("description_ai") or company.description_ai
         company.company_type = data.get("type") or company.company_type
+        company.industry = data.get("industry") or company.industry
+        company.employee_count = data.get("employee_count") or company.employee_count
         company.employee_range = data.get("employee_range") or company.employee_range
+        company.founded = data.get("founded") or company.founded
         company.other_websites = data.get("other_websites") or company.other_websites
         company.keywords = data.get("keywords") or company.keywords
         company.logo_url = data.get("logo_url") or company.logo_url
         
-        # Business details
-        company.industry = data.get("industry") or company.industry
-        company.headcount = data.get("employee_count") or company.headcount
-        company.headcount_by_department = data.get("headcount_by_department") or company.headcount_by_department
-        company.founded_year = data.get("founded") or company.founded_year
-        
-        # Location details
+        # Location (flatten nested object)
         location = data.get("location", {}) if isinstance(data.get("location"), dict) else {}
         company.location_country = location.get("country") or company.location_country
         company.location_city = location.get("city") or company.location_city
@@ -178,11 +171,9 @@ class MarketSizingJob:
         company.location_country_code = location.get("country_code") or company.location_country_code
         company.location_raw_address = location.get("raw_address") or company.location_raw_address
         
-        # Contact information
         company.email_tech = data.get("email_tech") or company.email_tech
         company.phone_hq = data.get("phone_hq") or company.phone_hq
         
-        # Social media URLs
         company.linkedin_url = data.get("linkedin_url") or company.linkedin_url
         company.twitter_url = data.get("twitter_url") or company.twitter_url
         company.facebook_url = data.get("facebook_url") or company.facebook_url
@@ -190,15 +181,15 @@ class MarketSizingJob:
         company.instagram_url = data.get("instagram_url") or company.instagram_url
         company.youtube_url = data.get("youtube_url") or company.youtube_url
         
-        # Revenue information
+        # Revenue (flatten nested object)
         revenue_range = data.get("revenue_range", {}) if isinstance(data.get("revenue_range"), dict) else {}
         company.revenue_min = revenue_range.get("min") or company.revenue_min
         company.revenue_max = revenue_range.get("max") or company.revenue_max
-        company.revenue_printed = data.get("revenue_range_printed") or company.revenue_printed
+        company.revenue_range_printed = data.get("revenue_range_printed") or company.revenue_range_printed
         
-        # Attribute flags
+        # Attributes (flatten nested object)
         attributes = data.get("attributes", {}) if isinstance(data.get("attributes"), dict) else {}
-        company.b2b = attributes.get("is_b2b") if attributes.get("is_b2b") is not None else company.b2b
+        company.is_b2b = attributes.get("is_b2b") if attributes.get("is_b2b") is not None else company.is_b2b
         company.has_demo = attributes.get("has_demo") if attributes.get("has_demo") is not None else company.has_demo
         company.has_free_trial = attributes.get("has_free_trial") if attributes.get("has_free_trial") is not None else company.has_free_trial
         company.has_downloadable = attributes.get("has_downloadable") if attributes.get("has_downloadable") is not None else company.has_downloadable
@@ -206,12 +197,10 @@ class MarketSizingJob:
         company.has_online_reviews = attributes.get("has_online_reviews") if attributes.get("has_online_reviews") is not None else company.has_online_reviews
         company.has_pricing = attributes.get("has_pricing") if attributes.get("has_pricing") is not None else company.has_pricing
         
-        # Complex data structures
         company.funding = data.get("funding") or company.funding
         company.technology = data.get("technology") or company.technology
         company.job_postings = data.get("job_postings") or company.job_postings
         
-        # Classification codes
         company.sic_codes = data.get("sic_codes") or company.sic_codes
         company.naics_codes = data.get("naics_codes") or company.naics_codes
         company.linkedin_id = data.get("linkedin_id") or company.linkedin_id
@@ -219,7 +208,8 @@ class MarketSizingJob:
     def _process_person_counts(self, job, company):
         credits_used = 0
         
-        if not company.root_domain:
+        root_domain = registrable_root_domain(company.domain or "")
+        if not root_domain:
             return credits_used
         
         for person_config in job.person_filters:
@@ -231,7 +221,7 @@ class MarketSizingJob:
             if "websites" not in filters["company"]:
                 filters["company"]["websites"] = {"include": [], "exclude": []}
             
-            filters["company"]["websites"]["include"] = [company.root_domain]
+            filters["company"]["websites"]["include"] = [root_domain]
             
             response = self.client.search_people(filters, page=1)
             credits_used += 1
