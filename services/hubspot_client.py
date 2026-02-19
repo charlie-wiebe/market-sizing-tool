@@ -64,63 +64,37 @@ class HubSpotClient:
             logger.error(f"HubSpot API request failed: {e}")
             return {"error": str(e)}
 
-    def search_companies_by_linkedin_handles(self, linkedin_handles: List[str]) -> Dict:
-        """
-        Search for companies by LinkedIn handles using batch search.
-        HubSpot allows max 3 filterGroups per request, so we chunk accordingly.
-        """
-        if not linkedin_handles:
-            return {"results": []}
+    def search_company_by_linkedin_handle(self, handle: str) -> List[Dict]:
+        """Search HubSpot for a single LinkedIn handle. Returns list of matching records."""
+        if not handle:
+            return []
         
-        all_results = []
-        # HubSpot API limit: max 3 filterGroups per search request
-        for i in range(0, len(linkedin_handles), 3):
-            chunk = linkedin_handles[i:i+3]
-            filter_groups = [{
+        search_request = {
+            "filterGroups": [{
                 "filters": [{"propertyName": "hs_linkedin_handle", "operator": "EQ", "value": handle}]
-            } for handle in chunk]
-            
-            search_request = {
-                "filterGroups": filter_groups,
-                "properties": ["hs_object_id", "domain", "hs_linkedin_handle", "vertical", "createdate"],
-                "limit": 100
-            }
-            
-            result = self._make_request("POST", "/crm/v3/objects/companies/search", search_request)
-            if "results" in result:
-                all_results.extend(result["results"])
+            }],
+            "properties": ["hs_object_id", "domain", "hs_linkedin_handle", "vertical", "createdate"],
+            "limit": 100
+        }
         
-        logger.info(f"Searched HubSpot for {len(linkedin_handles)} LinkedIn handles, found {len(all_results)} results")
-        return {"results": all_results}
+        result = self._make_request("POST", "/crm/v3/objects/companies/search", search_request)
+        return result.get("results", [])
 
-    def search_companies_by_domains(self, domains: List[str]) -> Dict:
-        """
-        Search for companies by domains using batch search.
-        HubSpot allows max 3 filterGroups per request, so we chunk accordingly.
-        """
-        if not domains:
-            return {"results": []}
+    def search_company_by_domain(self, domain: str) -> List[Dict]:
+        """Search HubSpot for a single domain. Returns list of matching records."""
+        if not domain:
+            return []
         
-        all_results = []
-        # HubSpot API limit: max 3 filterGroups per search request
-        for i in range(0, len(domains), 3):
-            chunk = domains[i:i+3]
-            filter_groups = [{
-                "filters": [{"propertyName": "domain", "operator": "EQ", "value": d}]
-            } for d in chunk]
-            
-            search_request = {
-                "filterGroups": filter_groups,
-                "properties": ["hs_object_id", "domain", "hs_linkedin_handle", "vertical", "createdate"],
-                "limit": 100
-            }
-            
-            result = self._make_request("POST", "/crm/v3/objects/companies/search", search_request)
-            if "results" in result:
-                all_results.extend(result["results"])
+        search_request = {
+            "filterGroups": [{
+                "filters": [{"propertyName": "domain", "operator": "EQ", "value": domain}]
+            }],
+            "properties": ["hs_object_id", "domain", "hs_linkedin_handle", "vertical", "createdate"],
+            "limit": 100
+        }
         
-        logger.info(f"Searched HubSpot for {len(domains)} domains, found {len(all_results)} results")
-        return {"results": all_results}
+        result = self._make_request("POST", "/crm/v3/objects/companies/search", search_request)
+        return result.get("results", [])
 
     def resolve_duplicates(self, linkedin_results: List[Dict], domain_results: List[Dict], 
                           linkedin_handle: str, domain: str) -> Optional[Dict]:
@@ -183,15 +157,9 @@ class HubSpotClient:
 
     def batch_enrich_companies(self, companies: List[Dict]) -> Dict[int, Optional[Dict]]:
         """
-        Enrich a batch of companies with HubSpot data.
-        
-        Args:
-            companies: List of company dicts with keys: id, linkedin_url, domain
-            
-        Returns:
-            Dict mapping company_id to HubSpot enrichment data or None
+        Enrich companies with HubSpot data, searching one at a time.
+        For each company: search by LinkedIn handle first, then by domain.
         """
-        # Skip enrichment if HubSpot is not enabled
         if not self.enabled:
             logger.info("HubSpot enrichment skipped - API key not configured")
             return {company['id']: None for company in companies}
@@ -199,72 +167,29 @@ class HubSpotClient:
         from services.linkedin_utils import extract_linkedin_handle, normalize_domain
         
         enrichments = {}
-        
-        # Prepare lookup data
-        linkedin_lookup = {}  # handle -> [company_ids]
-        domain_lookup = {}    # domain -> [company_ids]
+        found_count = 0
         
         for company in companies:
             company_id = company['id']
             linkedin_handle = extract_linkedin_handle(company.get('linkedin_url'))
             domain = normalize_domain(company.get('domain'))
             
-            if linkedin_handle:
-                if linkedin_handle not in linkedin_lookup:
-                    linkedin_lookup[linkedin_handle] = []
-                linkedin_lookup[linkedin_handle].append(company_id)
+            # Search by LinkedIn handle
+            linkedin_results = self.search_company_by_linkedin_handle(linkedin_handle)
             
-            if domain:
-                if domain not in domain_lookup:
-                    domain_lookup[domain] = []
-                domain_lookup[domain].append(company_id)
-        
-        # Batch search by LinkedIn handles
-        linkedin_results_by_handle = {}
-        if linkedin_lookup:
-            handles = list(linkedin_lookup.keys())
-            response = self.search_companies_by_linkedin_handles(handles)
+            # Search by domain
+            domain_results = self.search_company_by_domain(domain)
             
-            if 'results' in response:
-                for result in response['results']:
-                    handle = result.get('properties', {}).get('hs_linkedin_handle', '')
-                    if handle not in linkedin_results_by_handle:
-                        linkedin_results_by_handle[handle] = []
-                    linkedin_results_by_handle[handle].append(result)
-        
-        # Batch search by domains  
-        domain_results_by_domain = {}
-        if domain_lookup:
-            domains = list(domain_lookup.keys())
-            response = self.search_companies_by_domains(domains)
-            
-            if 'results' in response:
-                for result in response['results']:
-                    domain = result.get('properties', {}).get('domain', '')
-                    if domain not in domain_results_by_domain:
-                        domain_results_by_domain[domain] = []
-                    domain_results_by_domain[domain].append(result)
-        
-        # Resolve results for each company
-        for company in companies:
-            company_id = company['id']
-            linkedin_handle = extract_linkedin_handle(company.get('linkedin_url'))
-            domain = normalize_domain(company.get('domain'))
-            
-            linkedin_results = linkedin_results_by_handle.get(linkedin_handle, [])
-            domain_results = domain_results_by_domain.get(domain, [])
-            
-            best_match = self.resolve_duplicates(linkedin_results, domain_results, 
+            # Resolve best match
+            best_match = self.resolve_duplicates(linkedin_results, domain_results,
                                                linkedin_handle, domain)
             
             if best_match:
                 properties = best_match.get('properties', {})
                 
-                # Parse HubSpot created date
                 hubspot_created_date = None
                 if properties.get('createdate'):
                     try:
-                        # HubSpot timestamps are in milliseconds
                         timestamp_ms = int(properties['createdate'])
                         hubspot_created_date = datetime.fromtimestamp(timestamp_ms / 1000)
                     except (ValueError, TypeError):
@@ -276,8 +201,9 @@ class HubSpotClient:
                     'lookup_method': best_match.get('_lookup_method'),
                     'hubspot_created_date': hubspot_created_date
                 }
+                found_count += 1
             else:
                 enrichments[company_id] = None
         
-        logger.info(f"Enriched {len([e for e in enrichments.values() if e])} out of {len(companies)} companies")
+        logger.info(f"Enriched {found_count} out of {len(companies)} companies")
         return enrichments

@@ -32,17 +32,20 @@ with app.app_context():
             for col in ['sample_titles', 'sample_names', 'query_filters']:
                 conn.execute(text(f"ALTER TABLE person_counts DROP COLUMN IF EXISTS {col}"))
             
-            # Clean up companies table: delete all rows, drop old columns, add new columns
-            conn.execute(text("DELETE FROM hubspot_enrichments"))
-            conn.execute(text("DELETE FROM person_counts"))
-            conn.execute(text("DELETE FROM companies"))
+            # One-time migration: clean up companies schema (only runs if old columns still exist)
+            result = conn.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name='companies' AND column_name='root_domain'"
+            ))
+            if result.fetchone():
+                conn.execute(text("DELETE FROM hubspot_enrichments"))
+                conn.execute(text("DELETE FROM person_counts"))
+                conn.execute(text("DELETE FROM companies"))
+                for col in ['root_domain', 'headcount', 'headcount_by_department', 'founded_year', 
+                             'funding_stage', 'b2b', 'revenue_range', 'revenue_printed', 'processed']:
+                    conn.execute(text(f"ALTER TABLE companies DROP COLUMN IF EXISTS {col}"))
             
-            # Drop old/renamed columns
-            for col in ['root_domain', 'headcount', 'headcount_by_department', 'founded_year', 
-                         'funding_stage', 'b2b', 'revenue_range', 'revenue_printed', 'processed']:
-                conn.execute(text(f"ALTER TABLE companies DROP COLUMN IF EXISTS {col}"))
-            
-            # Add new columns
+            # Idempotent: add new columns if missing
             conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS employee_count INTEGER"))
             conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS founded INTEGER"))
             conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_b2b BOOLEAN"))
