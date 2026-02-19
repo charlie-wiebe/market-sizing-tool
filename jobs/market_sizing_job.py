@@ -92,7 +92,13 @@ class MarketSizingJob:
         
         # Run HubSpot enrichment for detailed jobs
         if job.mode == 'detailed':
-            self._enrich_companies_with_hubspot(job)
+            try:
+                self._enrich_companies_with_hubspot(job)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"HubSpot enrichment failed for job {job.id}: {e}")
+                # Continue job processing even if HubSpot enrichment fails completely
 
     def _save_company(self, job_id, data):
         """Upsert company - update existing by prospeo_company_id or create new."""
@@ -238,13 +244,20 @@ class MarketSizingJob:
         logger = logging.getLogger(__name__)
         
         try:
+            logger.info(f"Starting HubSpot enrichment for job {job.id}")
+            
             # Get all companies for this job
             companies = Company.query.filter_by(job_id=job.id).all()
             if not companies:
-                logger.info("No companies to enrich with HubSpot")
+                logger.info(f"No companies to enrich with HubSpot for job {job.id}")
                 return
             
-            logger.info(f"Starting HubSpot enrichment for {len(companies)} companies")
+            logger.info(f"Found {len(companies)} companies to enrich with HubSpot for job {job.id}")
+            
+            # Check if HubSpot client is enabled
+            if not self.hubspot_client.enabled:
+                logger.info(f"HubSpot enrichment skipped for job {job.id} - API key not configured")
+                return
             
             # Process companies in batches of 50 for efficiency
             batch_size = 50

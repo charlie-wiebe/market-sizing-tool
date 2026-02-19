@@ -11,10 +11,17 @@ class HubSpotClient:
     def __init__(self):
         self.base_url = Config.HUBSPOT_BASE_URL
         self.api_key = Config.HUBSPOT_API_KEY
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+        self.enabled = bool(self.api_key)  # Only enable if API key is present
+        
+        if self.enabled:
+            self.headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+        else:
+            self.headers = {}
+            logger.warning("HubSpot API key not configured - HubSpot enrichment will be skipped")
+        
         # Rate limiting: 100 requests per 10 seconds
         self.max_requests_per_window = Config.HUBSPOT_MAX_PER_10_SECONDS
         self.window_duration = 10.0  # seconds
@@ -188,6 +195,11 @@ class HubSpotClient:
         Returns:
             Dict mapping company_id to HubSpot enrichment data or None
         """
+        # Skip enrichment if HubSpot is not enabled
+        if not self.enabled:
+            logger.info("HubSpot enrichment skipped - API key not configured")
+            return {company['id']: None for company in companies}
+        
         from services.linkedin_utils import extract_linkedin_handle, normalize_domain
         
         enrichments = {}
