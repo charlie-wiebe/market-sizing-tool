@@ -77,17 +77,19 @@ class HubSpotClient:
         if not linkedin_handles:
             return {"results": []}
         
-        # Build search filters for LinkedIn handles
-        filters = []
+        # Build search filters for LinkedIn handles - each handle gets its own filter group for OR logic
+        filter_groups = []
         for handle in linkedin_handles:
-            filters.append({
-                "propertyName": "hs_linkedin_handle",
-                "operator": "EQ",
-                "value": handle
+            filter_groups.append({
+                "filters": [{
+                    "propertyName": "hs_linkedin_handle",
+                    "operator": "EQ",
+                    "value": handle
+                }]
             })
         
         search_request = {
-            "filterGroups": [{"filters": filters}],
+            "filterGroups": filter_groups,
             "properties": ["hs_object_id", "domain", "hs_linkedin_handle", "vertical", "createdate"],
             "limit": 100
         }
@@ -108,17 +110,19 @@ class HubSpotClient:
         if not domains:
             return {"results": []}
         
-        # Build search filters for domains
-        filters = []
+        # Build search filters for domains - each domain gets its own filter group for OR logic
+        filter_groups = []
         for domain in domains:
-            filters.append({
-                "propertyName": "domain",
-                "operator": "EQ", 
-                "value": domain
+            filter_groups.append({
+                "filters": [{
+                    "propertyName": "domain",
+                    "operator": "EQ", 
+                    "value": domain
+                }]
             })
         
         search_request = {
-            "filterGroups": [{"filters": filters}],
+            "filterGroups": filter_groups,
             "properties": ["hs_object_id", "domain", "hs_linkedin_handle", "vertical", "createdate"],
             "limit": 100
         }
