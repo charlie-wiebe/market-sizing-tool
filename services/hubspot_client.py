@@ -67,68 +67,60 @@ class HubSpotClient:
     def search_companies_by_linkedin_handles(self, linkedin_handles: List[str]) -> Dict:
         """
         Search for companies by LinkedIn handles using batch search.
-        
-        Args:
-            linkedin_handles: List of LinkedIn handles in format "company/companyname"
-            
-        Returns:
-            Dict with search results
+        HubSpot allows max 3 filterGroups per request, so we chunk accordingly.
         """
         if not linkedin_handles:
             return {"results": []}
         
-        # Build search filters for LinkedIn handles - each handle gets its own filter group for OR logic
-        filter_groups = []
-        for handle in linkedin_handles:
-            filter_groups.append({
-                "filters": [{
-                    "propertyName": "hs_linkedin_handle",
-                    "operator": "EQ",
-                    "value": handle
-                }]
-            })
+        all_results = []
+        # HubSpot API limit: max 3 filterGroups per search request
+        for i in range(0, len(linkedin_handles), 3):
+            chunk = linkedin_handles[i:i+3]
+            filter_groups = [{
+                "filters": [{"propertyName": "hs_linkedin_handle", "operator": "EQ", "value": handle}]
+            } for handle in chunk]
+            
+            search_request = {
+                "filterGroups": filter_groups,
+                "properties": ["hs_object_id", "domain", "hs_linkedin_handle", "vertical", "createdate"],
+                "limit": 100
+            }
+            
+            result = self._make_request("POST", "/crm/v3/objects/companies/search", search_request)
+            if "results" in result:
+                all_results.extend(result["results"])
         
-        search_request = {
-            "filterGroups": filter_groups,
-            "properties": ["hs_object_id", "domain", "hs_linkedin_handle", "vertical", "createdate"],
-            "limit": 100
-        }
-        
-        logger.info(f"Searching HubSpot for {len(linkedin_handles)} LinkedIn handles")
-        return self._make_request("POST", "/crm/v3/objects/companies/search", search_request)
+        logger.info(f"Searched HubSpot for {len(linkedin_handles)} LinkedIn handles, found {len(all_results)} results")
+        return {"results": all_results}
 
     def search_companies_by_domains(self, domains: List[str]) -> Dict:
         """
         Search for companies by domains using batch search.
-        
-        Args:
-            domains: List of domain names
-            
-        Returns:
-            Dict with search results
+        HubSpot allows max 3 filterGroups per request, so we chunk accordingly.
         """
         if not domains:
             return {"results": []}
         
-        # Build search filters for domains - each domain gets its own filter group for OR logic
-        filter_groups = []
-        for domain in domains:
-            filter_groups.append({
-                "filters": [{
-                    "propertyName": "domain",
-                    "operator": "EQ", 
-                    "value": domain
-                }]
-            })
+        all_results = []
+        # HubSpot API limit: max 3 filterGroups per search request
+        for i in range(0, len(domains), 3):
+            chunk = domains[i:i+3]
+            filter_groups = [{
+                "filters": [{"propertyName": "domain", "operator": "EQ", "value": d}]
+            } for d in chunk]
+            
+            search_request = {
+                "filterGroups": filter_groups,
+                "properties": ["hs_object_id", "domain", "hs_linkedin_handle", "vertical", "createdate"],
+                "limit": 100
+            }
+            
+            result = self._make_request("POST", "/crm/v3/objects/companies/search", search_request)
+            if "results" in result:
+                all_results.extend(result["results"])
         
-        search_request = {
-            "filterGroups": filter_groups,
-            "properties": ["hs_object_id", "domain", "hs_linkedin_handle", "vertical", "createdate"],
-            "limit": 100
-        }
-        
-        logger.info(f"Searching HubSpot for {len(domains)} domains")
-        return self._make_request("POST", "/crm/v3/objects/companies/search", search_request)
+        logger.info(f"Searched HubSpot for {len(domains)} domains, found {len(all_results)} results")
+        return {"results": all_results}
 
     def resolve_duplicates(self, linkedin_results: List[Dict], domain_results: List[Dict], 
                           linkedin_handle: str, domain: str) -> Optional[Dict]:
