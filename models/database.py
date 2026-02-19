@@ -65,32 +65,38 @@ class Company(db.Model):
     job_id = db.Column(db.Integer, db.ForeignKey('jobs.id'), nullable=False)
     prospeo_company_id = db.Column(db.String(100), index=True)  # company_id from Prospeo API
     
-    # Basic company information (always present in Prospeo API)
     name = db.Column(db.String(500))
-    website = db.Column(db.String(500))
     domain = db.Column(db.String(255))
+    website = db.Column(db.String(500))
+    root_domain = db.Column(db.String(255))
+    
+    # Extended company information
     description = db.Column(db.Text)
     description_seo = db.Column(db.Text)
     description_ai = db.Column(db.Text)
-    company_type = db.Column(db.String(50))  # "Private", "Public", etc.
-    industry = db.Column(db.String(255))
-    employee_count = db.Column(db.Integer)  # employee_count from API
+    company_type = db.Column(db.String(50))  # Private, Public, etc.
     employee_range = db.Column(db.String(50))  # "1001-2000"
-    founded = db.Column(db.Integer)  # founded year
     other_websites = db.Column(db.JSON)
     keywords = db.Column(db.JSON)
     logo_url = db.Column(db.String(500))
     
-    # Location details (nested object in API)
+    # Business details
+    industry = db.Column(db.String(255))
+    headcount = db.Column(db.Integer)
+    headcount_by_department = db.Column(db.JSON)
+    founded_year = db.Column(db.Integer)
+    funding_stage = db.Column(db.String(100))
+    
+    # Location details
     location_country = db.Column(db.String(100))
     location_city = db.Column(db.String(255))
     location_state = db.Column(db.String(100))
     location_country_code = db.Column(db.String(10))
     location_raw_address = db.Column(db.Text)
     
-    # Contact information (nested objects in API)
-    email_tech = db.Column(db.JSON)  # domain, mx_provider, catch_all_domain
-    phone_hq = db.Column(db.JSON)    # phone_hq, national, international, country, country_code
+    # Contact information
+    email_tech = db.Column(db.JSON)
+    phone_hq = db.Column(db.JSON)
     
     # Social media URLs
     linkedin_url = db.Column(db.String(500))
@@ -100,13 +106,14 @@ class Company(db.Model):
     instagram_url = db.Column(db.String(500))
     youtube_url = db.Column(db.String(500))
     
-    # Revenue information (nested object in API)
+    # Revenue information
+    revenue_range = db.Column(db.String(50))
     revenue_min = db.Column(db.BigInteger)
     revenue_max = db.Column(db.BigInteger)
-    revenue_range_printed = db.Column(db.String(50))  # "$100M"
+    revenue_printed = db.Column(db.String(50))
     
-    # Attributes (nested object in API)
-    is_b2b = db.Column(db.Boolean)
+    # Attribute flags
+    b2b = db.Column(db.Boolean)
     has_demo = db.Column(db.Boolean)
     has_free_trial = db.Column(db.Boolean)
     has_downloadable = db.Column(db.Boolean)
@@ -114,17 +121,18 @@ class Company(db.Model):
     has_online_reviews = db.Column(db.Boolean)
     has_pricing = db.Column(db.Boolean)
     
-    # Complex data structures (nested objects in API)
-    funding = db.Column(db.JSON)        # count, total_funding, latest_funding_date, funding_events
-    technology = db.Column(db.JSON)     # count, technology_names, technology_list
-    job_postings = db.Column(db.JSON)   # active_count, active_titles
+    # Complex data structures
+    funding = db.Column(db.JSON)
+    technology = db.Column(db.JSON)
+    job_postings = db.Column(db.JSON)
     
     # Classification codes
     sic_codes = db.Column(db.JSON)
     naics_codes = db.Column(db.JSON)
     linkedin_id = db.Column(db.String(100))
     
-    # Meta field
+    # Meta fields
+    processed = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     person_counts = db.relationship('PersonCount', backref='company', lazy='dynamic')
@@ -132,38 +140,37 @@ class Company(db.Model):
     
     def to_dict(self):
         return {
-            # Core fields
             'id': self.id,
             'prospeo_company_id': self.prospeo_company_id,
             'name': self.name,
-            'website': self.website,
             'domain': self.domain,
+            'website': self.website,
+            'root_domain': self.root_domain,
             
-            # Basic company information
             'description': self.description,
             'description_seo': self.description_seo,
             'description_ai': self.description_ai,
             'company_type': self.company_type,
-            'industry': self.industry,
-            'employee_count': self.employee_count,
             'employee_range': self.employee_range,
-            'founded': self.founded,
             'other_websites': self.other_websites,
             'keywords': self.keywords,
             'logo_url': self.logo_url,
             
-            # Location details
+            'industry': self.industry,
+            'headcount': self.headcount,
+            'headcount_by_department': self.headcount_by_department,
+            'founded_year': self.founded_year,
+            'funding_stage': self.funding_stage,
+            
             'location_country': self.location_country,
             'location_city': self.location_city,
             'location_state': self.location_state,
             'location_country_code': self.location_country_code,
             'location_raw_address': self.location_raw_address,
             
-            # Contact information
             'email_tech': self.email_tech,
             'phone_hq': self.phone_hq,
             
-            # Social media URLs
             'linkedin_url': self.linkedin_url,
             'twitter_url': self.twitter_url,
             'facebook_url': self.facebook_url,
@@ -171,13 +178,12 @@ class Company(db.Model):
             'instagram_url': self.instagram_url,
             'youtube_url': self.youtube_url,
             
-            # Revenue information
+            'revenue_range': self.revenue_range,
             'revenue_min': self.revenue_min,
             'revenue_max': self.revenue_max,
-            'revenue_range_printed': self.revenue_range_printed,
+            'revenue_printed': self.revenue_printed,
             
-            # Attributes
-            'is_b2b': self.is_b2b,
+            'b2b': self.b2b,
             'has_demo': self.has_demo,
             'has_free_trial': self.has_free_trial,
             'has_downloadable': self.has_downloadable,
@@ -185,17 +191,14 @@ class Company(db.Model):
             'has_online_reviews': self.has_online_reviews,
             'has_pricing': self.has_pricing,
             
-            # Complex data structures
             'funding': self.funding,
             'technology': self.technology,
             'job_postings': self.job_postings,
             
-            # Classification codes
             'sic_codes': self.sic_codes,
             'naics_codes': self.naics_codes,
             'linkedin_id': self.linkedin_id,
             
-            # Person counts relationship
             'person_counts': {pc.query_name: pc.total_count for pc in self.person_counts}
         }
 

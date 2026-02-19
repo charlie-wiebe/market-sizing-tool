@@ -150,21 +150,25 @@ class MarketSizingJob:
         """Update company object with all fields from Prospeo API response."""
         # Core fields
         company.name = data.get("name") or company.name
-        company.website = data.get("website") or company.website
         company.domain = data.get("domain") or company.domain
+        company.website = data.get("website") or company.website
+        company.root_domain = root_domain or company.root_domain
         
-        # Basic company information
+        # Extended company information
         company.description = data.get("description") or company.description
         company.description_seo = data.get("description_seo") or company.description_seo
         company.description_ai = data.get("description_ai") or company.description_ai
         company.company_type = data.get("type") or company.company_type
-        company.industry = data.get("industry") or company.industry
-        company.employee_count = data.get("employee_count") or company.employee_count
         company.employee_range = data.get("employee_range") or company.employee_range
-        company.founded = data.get("founded") or company.founded
         company.other_websites = data.get("other_websites") or company.other_websites
         company.keywords = data.get("keywords") or company.keywords
         company.logo_url = data.get("logo_url") or company.logo_url
+        
+        # Business details
+        company.industry = data.get("industry") or company.industry
+        company.headcount = data.get("employee_count") or company.headcount
+        company.headcount_by_department = data.get("headcount_by_department") or company.headcount_by_department
+        company.founded_year = data.get("founded") or company.founded_year
         
         # Location details
         location = data.get("location", {}) if isinstance(data.get("location"), dict) else {}
@@ -190,11 +194,11 @@ class MarketSizingJob:
         revenue_range = data.get("revenue_range", {}) if isinstance(data.get("revenue_range"), dict) else {}
         company.revenue_min = revenue_range.get("min") or company.revenue_min
         company.revenue_max = revenue_range.get("max") or company.revenue_max
-        company.revenue_range_printed = data.get("revenue_range_printed") or company.revenue_range_printed
+        company.revenue_printed = data.get("revenue_range_printed") or company.revenue_printed
         
-        # Attributes
+        # Attribute flags
         attributes = data.get("attributes", {}) if isinstance(data.get("attributes"), dict) else {}
-        company.is_b2b = attributes.get("is_b2b") if attributes.get("is_b2b") is not None else company.is_b2b
+        company.b2b = attributes.get("is_b2b") if attributes.get("is_b2b") is not None else company.b2b
         company.has_demo = attributes.get("has_demo") if attributes.get("has_demo") is not None else company.has_demo
         company.has_free_trial = attributes.get("has_free_trial") if attributes.get("has_free_trial") is not None else company.has_free_trial
         company.has_downloadable = attributes.get("has_downloadable") if attributes.get("has_downloadable") is not None else company.has_downloadable
@@ -215,8 +219,7 @@ class MarketSizingJob:
     def _process_person_counts(self, job, company):
         credits_used = 0
         
-        root_domain = registrable_root_domain(company.domain or "")
-        if not root_domain:
+        if not company.root_domain:
             return credits_used
         
         for person_config in job.person_filters:
@@ -228,7 +231,7 @@ class MarketSizingJob:
             if "websites" not in filters["company"]:
                 filters["company"]["websites"] = {"include": [], "exclude": []}
             
-            filters["company"]["websites"]["include"] = [root_domain]
+            filters["company"]["websites"]["include"] = [company.root_domain]
             
             response = self.client.search_people(filters, page=1)
             credits_used += 1

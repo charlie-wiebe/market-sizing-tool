@@ -467,7 +467,7 @@ def export_job(job_id):
             
             # Basic company information  
             "description", "description_seo", "description_ai", "company_type", 
-            "industry", "employee_count", "employee_range", "founded", "logo_url",
+            "industry", "headcount", "employee_range", "founded_year", "logo_url",
             
             # Location details
             "location_country", "location_city", "location_state", "location_country_code", 
@@ -478,10 +478,10 @@ def export_job(job_id):
             "instagram_url", "youtube_url",
             
             # Revenue information
-            "revenue_min", "revenue_max", "revenue_range_printed",
+            "revenue_min", "revenue_max", "revenue_printed",
             
             # Attributes
-            "is_b2b", "has_demo", "has_free_trial", "has_downloadable", 
+            "b2b", "has_demo", "has_free_trial", "has_downloadable", 
             "has_mobile_apps", "has_online_reviews", "has_pricing",
             
             # Classification
@@ -519,9 +519,9 @@ def export_job(job_id):
                 (company.description_ai or "")[:200] if company.description_ai else "",
                 company.company_type or "",
                 company.industry or "",
-                company.employee_count or "",
+                company.headcount or "",
                 company.employee_range or "",
-                company.founded or "",
+                company.founded_year or "",
                 company.logo_url or "",
                 
                 # Location details
@@ -542,10 +542,10 @@ def export_job(job_id):
                 # Revenue information
                 company.revenue_min or "",
                 company.revenue_max or "",
-                company.revenue_range_printed or "",
+                company.revenue_printed or "",
                 
                 # Attributes
-                company.is_b2b if company.is_b2b is not None else "",
+                company.b2b if company.b2b is not None else "",
                 company.has_demo if company.has_demo is not None else "",
                 company.has_free_trial if company.has_free_trial is not None else "",
                 company.has_downloadable if company.has_downloadable is not None else "",
