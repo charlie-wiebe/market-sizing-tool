@@ -215,7 +215,7 @@ class MarketSizingJob:
     def _process_person_counts(self, job, company):
         credits_used = 0
         
-        root_domain = registrable_root_domain(company.domain or company.website or "")
+        root_domain = registrable_root_domain(company.domain or "")
         if not root_domain:
             return credits_used
         
