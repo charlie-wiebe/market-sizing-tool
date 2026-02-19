@@ -215,7 +215,8 @@ class MarketSizingJob:
     def _process_person_counts(self, job, company):
         credits_used = 0
         
-        if not company.root_domain:
+        root_domain = registrable_root_domain(company.domain or company.website or "")
+        if not root_domain:
             return credits_used
         
         for person_config in job.person_filters:
@@ -227,7 +228,7 @@ class MarketSizingJob:
             if "websites" not in filters["company"]:
                 filters["company"]["websites"] = {"include": [], "exclude": []}
             
-            filters["company"]["websites"]["include"] = [company.root_domain]
+            filters["company"]["websites"]["include"] = [root_domain]
             
             response = self.client.search_people(filters, page=1)
             credits_used += 1
