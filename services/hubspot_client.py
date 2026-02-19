@@ -22,14 +22,14 @@ class HubSpotClient:
             self.headers = {}
             logger.warning("HubSpot API key not configured - HubSpot enrichment will be skipped")
         
-        # Rate limiting: 100 requests per 10 seconds
-        self.max_requests_per_window = Config.HUBSPOT_MAX_PER_10_SECONDS
-        self.window_duration = 10.0  # seconds
+        # Rate limiting: search endpoints limited to 5 requests per second
+        self.max_requests_per_window = 5
+        self.window_duration = 1.0  # seconds
         self.request_times = []
         self.timeout = 30
 
     def _rate_limit_wait(self):
-        """Enforce rate limiting based on HubSpot's 100 requests per 10 seconds limit."""
+        """Enforce rate limiting based on HubSpot's 5 requests per second search limit."""
         now = time.time()
         
         # Remove requests older than the window

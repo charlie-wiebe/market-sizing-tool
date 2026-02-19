@@ -98,7 +98,6 @@ class MarketSizingJob:
                     if job.person_filters:
                         credits_used += self._process_person_counts(job, company)
                     
-                    company.processed = True
                     companies_processed += 1
                     job.processed_companies = companies_processed
                     job.actual_credits = credits_used
