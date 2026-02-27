@@ -49,6 +49,18 @@ with app.app_context():
             conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_b2b BOOLEAN"))
             conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS revenue_range_printed VARCHAR(50)"))
             
+            # Active record tracking columns (added in prospeo-location-normalization)
+            conn.execute(text("ALTER TABLE person_counts ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE"))
+            conn.execute(text("ALTER TABLE hubspot_enrichments ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE"))
+            
+            # Set existing records to active if they aren't already
+            conn.execute(text("UPDATE person_counts SET is_active = TRUE WHERE is_active IS NULL"))
+            conn.execute(text("UPDATE hubspot_enrichments SET is_active = TRUE WHERE is_active IS NULL"))
+            
+            # Create indexes for performance
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_person_counts_is_active ON person_counts(is_active)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_hubspot_enrichments_is_active ON hubspot_enrichments(is_active)"))
+            
             conn.commit()
         except Exception as e:
             print(f"Migration note: {e}")
