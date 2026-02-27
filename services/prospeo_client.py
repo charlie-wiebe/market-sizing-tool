@@ -208,9 +208,17 @@ class ProspeoClient:
             if company.get('name'):
                 exclusion_names.append(company['name'])
             if company.get('website'):
-                exclusion_websites.append(company['website'])
+                # Normalize website to root domain to avoid subdomain errors
+                from services.domain_utils import registrable_root_domain
+                root_domain = registrable_root_domain(company['website'])
+                if root_domain:
+                    exclusion_websites.append(root_domain)
             if company.get('domain'):
-                exclusion_websites.append(company['domain'])
+                # Normalize domain to root domain to avoid subdomain errors  
+                from services.domain_utils import registrable_root_domain
+                root_domain = registrable_root_domain(company['domain'])
+                if root_domain:
+                    exclusion_websites.append(root_domain)
         
         # Remove duplicates and limit to 500 (Prospeo API limit)
         exclusion_names = list(set(exclusion_names))[:500]
