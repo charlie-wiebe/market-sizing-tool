@@ -425,8 +425,8 @@ class MarketSizingJob:
             # Check for existing person count data
             if job.skip_existing_person_counts:
                 existing_count = self._find_existing_person_count(company, query_name, job.max_data_age_days)
-                if existing_count:
-                    logger.debug(f"Skipping person count for {company.name} - {query_name}: existing data found")
+                if existing_count and existing_count.status == 'ok':
+                    logger.debug(f"Skipping person count for {company.name} - {query_name}: existing successful data found")
                     
                     # Create a reference to the existing data for this job
                     person_count_ref = PersonCount(
@@ -441,6 +441,8 @@ class MarketSizingJob:
                     db.session.add(person_count_ref)
                     person_counts_skipped += 1
                     continue
+                elif existing_count and existing_count.status != 'ok':
+                    logger.info(f"Re-running person count for {company.name} - {query_name}: existing data had error status '{existing_count.status}'")
             
             # Prepare filters with location resolution
             filters = self._prepare_person_search_filters(job, person_config)
@@ -572,7 +574,6 @@ class MarketSizingJob:
                 PersonCount.prospeo_company_id == company.prospeo_company_id,
                 PersonCount.query_name == query_name,
                 PersonCount.created_at >= max_age,
-                PersonCount.status == 'ok',
                 PersonCount.is_active == True
             ).first()
         
@@ -596,7 +597,6 @@ class MarketSizingJob:
                         PersonCount.company_id.in_(company_ids),
                         PersonCount.query_name == query_name,
                         PersonCount.created_at >= max_age,
-                        PersonCount.status == 'ok',
                         PersonCount.is_active == True
                     ).first()
         
