@@ -195,61 +195,6 @@ class ProspeoClient:
         self._total_companies_collected = 0
         self._total_people_collected = 0
     
-    def build_exclusion_filters(self, existing_companies, base_filters):
-        """Build exclusion filters to prevent collecting duplicate companies."""
-        if not existing_companies:
-            return base_filters
-            
-        # Extract company names and websites for exclusion
-        exclusion_names = []
-        exclusion_websites = []
-        
-        for company in existing_companies:
-            if company.get('name'):
-                exclusion_names.append(company['name'])
-            if company.get('website'):
-                # Normalize website to root domain to avoid subdomain errors
-                from services.domain_utils import registrable_root_domain
-                root_domain = registrable_root_domain(company['website'])
-                if root_domain:
-                    exclusion_websites.append(root_domain)
-            if company.get('domain'):
-                # Normalize domain to root domain to avoid subdomain errors  
-                from services.domain_utils import registrable_root_domain
-                root_domain = registrable_root_domain(company['domain'])
-                if root_domain:
-                    exclusion_websites.append(root_domain)
-        
-        # Remove duplicates and limit to 500 (Prospeo API limit)
-        exclusion_names = list(set(exclusion_names))[:500]
-        exclusion_websites = list(set(exclusion_websites))[:500]
-        
-        # Create modified filters with exclusions
-        modified_filters = dict(base_filters)
-        
-        if exclusion_names:
-            if "company" not in modified_filters:
-                modified_filters["company"] = {}
-            if "names" not in modified_filters["company"]:
-                modified_filters["company"]["names"] = {}
-            if "exclude" not in modified_filters["company"]["names"]:
-                modified_filters["company"]["names"]["exclude"] = []
-            
-            modified_filters["company"]["names"]["exclude"].extend(exclusion_names)
-            self.logger.info(f"Added {len(exclusion_names)} company names to exclusion filter")
-        
-        if exclusion_websites:
-            if "company" not in modified_filters:
-                modified_filters["company"] = {}
-            if "websites" not in modified_filters["company"]:
-                modified_filters["company"]["websites"] = {}
-            if "exclude" not in modified_filters["company"]["websites"]:
-                modified_filters["company"]["websites"]["exclude"] = []
-            
-            modified_filters["company"]["websites"]["exclude"].extend(exclusion_websites)
-            self.logger.info(f"Added {len(exclusion_websites)} company websites to exclusion filter")
-        
-        return modified_filters
     
     def search_suggestions(self, location=None, job_title=None):
         payload = {}

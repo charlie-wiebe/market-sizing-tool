@@ -96,11 +96,6 @@ class MarketSizingJob:
         job.estimated_credits = plan["credits_estimate"]
         db.session.commit()
         
-        # Get existing companies for potential pre-filtering
-        existing_companies_for_exclusion = []
-        if job.skip_existing_companies:
-            existing_companies_for_exclusion = self._get_existing_companies_for_exclusion(job)
-            logger.info(f"JOB {job.id}: Found {len(existing_companies_for_exclusion)} existing companies for exclusion")
         
         credits_used = 0
         companies_processed = 0
@@ -117,12 +112,6 @@ class MarketSizingJob:
             logger.info(f"  Segment filters: {segment_filters}")
             logger.info(f"  Expected companies: {segment['estimated_count']}, Pages: {pages}")
             
-            # Apply exclusion filters for this segment
-            if existing_companies_for_exclusion:
-                segment_filters = self.client.build_exclusion_filters(
-                    existing_companies_for_exclusion, segment_filters
-                )
-                logger.info(f"JOB {job.id}: Applied exclusion filters to segment {segment_idx + 1}")
             
             actual_companies_in_segment = 0
             
@@ -300,29 +289,6 @@ class MarketSizingJob:
         company.naics_codes = data.get("naics_codes") or company.naics_codes
         company.linkedin_id = data.get("linkedin_id") or company.linkedin_id
 
-    def _get_existing_companies_for_exclusion(self, job):
-        """Get existing companies for building exclusion filters."""
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        # Use all-or-nothing approach - no age filtering for companies
-        # Get all companies with prospeo_company_id
-        existing_companies = db.session.query(Company).filter(
-            Company.prospeo_company_id.isnot(None)
-        ).limit(500).all()  # Limit to 500 due to Prospeo API constraints
-        
-        # Convert to format suitable for exclusion filters
-        exclusion_data = []
-        for company in existing_companies:
-            exclusion_data.append({
-                'name': company.name,
-                'website': company.website,
-                'domain': company.domain,
-                'prospeo_company_id': company.prospeo_company_id
-            })
-        
-        logger.info(f"JOB {job.id}: Prepared {len(exclusion_data)} companies for exclusion filters")
-        return exclusion_data
     
     def _prepare_company_search_filters(self, company_filters):
         """Apply location normalization to company search filters using Search Suggestions API."""
