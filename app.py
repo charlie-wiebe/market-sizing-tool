@@ -109,7 +109,7 @@ def index():
         if job.mode == 'detailed':
             # Count total companies and HubSpot enrichments for this job
             total_companies = Company.query.filter_by(job_id=job.id).count()
-            hubspot_enrichments = HubSpotEnrichment.query.filter_by(job_id=job.id).count()
+            hubspot_enrichments = HubSpotEnrichment.query.filter_by(job_id=job.id, is_active=True).count()
             
             job.hubspot_enriched_count = hubspot_enrichments
             job.hubspot_enrichment_percentage = round((hubspot_enrichments / total_companies * 100), 1) if total_companies > 0 else 0
@@ -501,7 +501,7 @@ def get_job_results(job_id):
     person_counts_agg = db.session.query(
         PersonCount.query_name,
         db.func.sum(PersonCount.total_count).label("total")
-    ).filter_by(job_id=job_id).group_by(PersonCount.query_name).all()
+    ).filter_by(job_id=job_id, is_active=True).group_by(PersonCount.query_name).all()
     
     aggregates = {name: total for name, total in person_counts_agg}
     
@@ -600,7 +600,7 @@ def export_job(job_id):
         writer.writerow(headers)
         
         for company in companies:
-            person_counts = {pc.query_name: pc.total_count for pc in company.person_counts}
+            person_counts = {pc.query_name: pc.total_count for pc in company.person_counts.filter_by(is_active=True)}
             
             # Helper function to serialize JSON fields for CSV
             def serialize_json(value):
@@ -658,13 +658,16 @@ def export_job(job_id):
                 company.has_pricing if company.has_pricing is not None else "",
                 
                 # Classification
-                company.linkedin_id or "",
-                
-                # HubSpot enrichment
-                company.hubspot_enrichments.first().hubspot_object_id if company.hubspot_enrichments.first() else "",
-                company.hubspot_enrichments.first().vertical if company.hubspot_enrichments.first() else "",
-                company.hubspot_enrichments.first().lookup_method if company.hubspot_enrichments.first() else ""
+                company.linkedin_id or ""
             ]
+            
+            # HubSpot enrichment (cached to avoid multiple queries, filter for active only)
+            hubspot_enrichment = company.hubspot_enrichments.filter_by(is_active=True).first()
+            row.extend([
+                hubspot_enrichment.hubspot_object_id if hubspot_enrichment else "",
+                hubspot_enrichment.vertical if hubspot_enrichment else "",
+                hubspot_enrichment.lookup_method if hubspot_enrichment else ""
+            ])
             
             # Add person count columns
             for qn in sorted(person_query_names):
