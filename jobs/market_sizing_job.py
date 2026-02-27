@@ -375,19 +375,15 @@ class MarketSizingJob:
             db.session.flush()
 
     def _process_person_counts(self, job, company):
-        credits_used = 0
-        person_counts_skipped = 0
-        
-        root_domain = registrable_root_domain(company.domain or "")
-        if not root_domain:
-            return credits_used
-        
+        """Process person counts with domain/website fallback and enhanced filters"""
         import logging
         logger = logging.getLogger(__name__)
         
+        credits_used = 0
+        person_counts_skipped = 0
+        
         for person_config in job.person_filters:
             query_name = person_config.get("name", "Unnamed Query")
-            filters = dict(person_config.get("filters", {}))
             
             # Check for existing person count data
             if job.skip_existing_person_counts:
@@ -409,41 +405,45 @@ class MarketSizingJob:
                     person_counts_skipped += 1
                     continue
             
-            if "company" not in filters:
-                filters["company"] = {}
-            if "websites" not in filters["company"]:
-                filters["company"]["websites"] = {"include": [], "exclude": []}
+            # Prepare filters with location resolution
+            filters = self._prepare_person_search_filters(job, person_config)
             
-            filters["company"]["websites"]["include"] = [root_domain]
+            # Try search with company domain first
+            domain_root = registrable_root_domain(company.domain or "")
+            result = None
             
-            logger.debug(f"Fetching person count for {company.name} - {query_name}")
-            response = self.client.search_people(filters, page=1)
-            credits_used += 1
+            if domain_root:
+                logger.debug(f"Trying person search for {company.name} - {query_name} with domain: {domain_root}")
+                result = self._execute_person_search(filters, domain_root, company, query_name)
+                credits_used += 1
+                
+                # If we got results, we're done
+                if result and result.get("total_count", 0) > 0:
+                    logger.debug(f"Person search succeeded with domain for {company.name}: {result['total_count']}")
+                    self._save_person_count_result(job, company, query_name, result)
+                    continue
             
-            pagination = self.client.get_pagination(response)
-            total_count = pagination["total_count"]
-            
-            status = "ok"
-            error_code = None
-            
-            if self.client.is_error(response):
-                status = "error"
-                error_code = self.client.get_error_code(response)
-                total_count = 0
-                logger.warning(f"Person count failed for {company.name} - {query_name}: {error_code}")
+            # Fallback - try with company website if different
+            website_root = registrable_root_domain(company.website or "")
+            if website_root and website_root != domain_root:
+                logger.debug(f"Trying person search fallback for {company.name} - {query_name} with website: {website_root}")
+                result = self._execute_person_search(filters, website_root, company, query_name)
+                credits_used += 1
+                
+                logger.debug(f"Person search fallback result for {company.name}: {result.get('total_count', 0)}")
+                self._save_person_count_result(job, company, query_name, result)
+            elif result:
+                # Save the domain result even if it was 0
+                self._save_person_count_result(job, company, query_name, result)
             else:
-                logger.debug(f"Person count for {company.name} - {query_name}: {total_count}")
-            
-            person_count = PersonCount(
-                company_id=company.id,
-                job_id=job.id,
-                query_name=query_name,
-                total_count=total_count,
-                status=status,
-                error_code=error_code,
-                prospeo_company_id=company.prospeo_company_id
-            )
-            db.session.add(person_count)
+                # No domain or website available
+                logger.warning(f"No domain or website available for {company.name}")
+                no_domain_result = {
+                    "total_count": 0,
+                    "status": "error", 
+                    "error_code": "NO_DOMAIN_AVAILABLE"
+                }
+                self._save_person_count_result(job, company, query_name, no_domain_result)
         
         # Update job tracking
         if person_counts_skipped > 0:
@@ -451,6 +451,67 @@ class MarketSizingJob:
             logger.info(f"JOB {job.id}: Skipped {person_counts_skipped} person count queries (existing data)")
         
         return credits_used
+    
+    def _prepare_person_search_filters(self, job, person_config):
+        """Prepare filters with dynamic location resolution and UI inputs"""
+        filters = dict(person_config.get("filters", {}))
+        
+        # Handle location formatting via Search Suggestions API
+        if "person_location_search" in filters:
+            includes = filters["person_location_search"].get("include", [])
+            resolved_includes = []
+            for location in includes:
+                resolved = self.client.resolve_location_format(location)
+                resolved_includes.append(resolved)
+            filters["person_location_search"]["include"] = resolved_includes
+        
+        # Note: time_in_role from UI is already handled by the frontend
+        # The UI widgets.timeRole.getValues() adds person_time_in_current_role if values provided
+        
+        return filters
+    
+    def _execute_person_search(self, filters, root_domain, company, query_name):
+        """Execute person search with given domain"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Set up company website filter
+        search_filters = dict(filters)
+        if "company" not in search_filters:
+            search_filters["company"] = {}
+        if "websites" not in search_filters["company"]:
+            search_filters["company"]["websites"] = {"include": [], "exclude": []}
+        
+        search_filters["company"]["websites"]["include"] = [root_domain]
+        
+        logger.debug(f"Executing person search for {company.name} - {query_name} with domain: {root_domain}")
+        response = self.client.search_people(search_filters, page=1)
+        
+        result = {"total_count": 0, "status": "ok", "error_code": None}
+        
+        if self.client.is_error(response):
+            result["status"] = "error"
+            result["error_code"] = self.client.get_error_code(response)
+            logger.warning(f"Person search failed for {company.name} - {query_name} (domain: {root_domain}): {result['error_code']}")
+        else:
+            pagination = self.client.get_pagination(response)
+            result["total_count"] = pagination.get("total_count", 0)
+            logger.debug(f"Person search for {company.name} - {query_name} (domain: {root_domain}): {result['total_count']}")
+        
+        return result
+    
+    def _save_person_count_result(self, job, company, query_name, result):
+        """Save person count result to database"""
+        person_count = PersonCount(
+            company_id=company.id,
+            job_id=job.id,
+            query_name=query_name,
+            total_count=result.get("total_count", 0),
+            status=result.get("status", "ok"),
+            error_code=result.get("error_code"),
+            prospeo_company_id=company.prospeo_company_id
+        )
+        db.session.add(person_count)
     
     def _find_existing_person_count(self, company, query_name, max_age_days):
         """Find existing person count data for a company and query within age limit."""
