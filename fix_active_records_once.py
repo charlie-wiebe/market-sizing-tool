@@ -58,7 +58,7 @@ def fix_active_records():
             updated_he = conn.rowcount if hasattr(conn, 'rowcount') else he_total
             print(f"Set {updated_he} HubSpotEnrichment records to inactive")
             
-            # Step 2: PersonCount deduplication - latest per (company_id, query_name)
+            # Step 2: PersonCount deduplication - latest per (prospeo_company_id, query_name)
             print("\nStep 2: PersonCount deduplication...")
             
             if Config.SQLALCHEMY_DATABASE_URI.startswith('sqlite'):
@@ -69,8 +69,23 @@ def fix_active_records():
                     WHERE id IN (
                         SELECT id FROM (
                             SELECT id, 
+                                   ROW_NUMBER() OVER (PARTITION BY prospeo_company_id, query_name ORDER BY created_at DESC) as rn
+                            FROM person_counts
+                            WHERE prospeo_company_id IS NOT NULL
+                        ) 
+                        WHERE rn = 1
+                    )
+                """))
+                # Also handle records with NULL prospeo_company_id separately  
+                conn.execute(text("""
+                    UPDATE person_counts 
+                    SET is_active = TRUE 
+                    WHERE id IN (
+                        SELECT id FROM (
+                            SELECT id, 
                                    ROW_NUMBER() OVER (PARTITION BY company_id, query_name ORDER BY created_at DESC) as rn
                             FROM person_counts
+                            WHERE prospeo_company_id IS NULL
                         ) 
                         WHERE rn = 1
                     )
@@ -83,14 +98,29 @@ def fix_active_records():
                     WHERE id IN (
                         SELECT id FROM (
                             SELECT id, 
+                                   ROW_NUMBER() OVER (PARTITION BY prospeo_company_id, query_name ORDER BY created_at DESC) as rn
+                            FROM person_counts
+                            WHERE prospeo_company_id IS NOT NULL
+                        ) ranked
+                        WHERE rn = 1
+                    )
+                """))
+                # Also handle records with NULL prospeo_company_id separately
+                conn.execute(text("""
+                    UPDATE person_counts 
+                    SET is_active = TRUE 
+                    WHERE id IN (
+                        SELECT id FROM (
+                            SELECT id, 
                                    ROW_NUMBER() OVER (PARTITION BY company_id, query_name ORDER BY created_at DESC) as rn
                             FROM person_counts
+                            WHERE prospeo_company_id IS NULL
                         ) ranked
                         WHERE rn = 1
                     )
                 """))
             
-            # Step 3: HubSpotEnrichment deduplication - latest per company_id
+            # Step 3: HubSpotEnrichment deduplication - latest per hubspot_object_id
             print("Step 3: HubSpotEnrichment deduplication...")
             
             if Config.SQLALCHEMY_DATABASE_URI.startswith('sqlite'):
@@ -101,8 +131,23 @@ def fix_active_records():
                     WHERE id IN (
                         SELECT id FROM (
                             SELECT id, 
+                                   ROW_NUMBER() OVER (PARTITION BY hubspot_object_id ORDER BY created_at DESC) as rn
+                            FROM hubspot_enrichments
+                            WHERE hubspot_object_id IS NOT NULL
+                        )
+                        WHERE rn = 1
+                    )
+                """))
+                # Handle records with NULL hubspot_object_id separately
+                conn.execute(text("""
+                    UPDATE hubspot_enrichments 
+                    SET is_active = TRUE 
+                    WHERE id IN (
+                        SELECT id FROM (
+                            SELECT id, 
                                    ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY created_at DESC) as rn
                             FROM hubspot_enrichments
+                            WHERE hubspot_object_id IS NULL
                         )
                         WHERE rn = 1
                     )
@@ -115,8 +160,23 @@ def fix_active_records():
                     WHERE id IN (
                         SELECT id FROM (
                             SELECT id, 
+                                   ROW_NUMBER() OVER (PARTITION BY hubspot_object_id ORDER BY created_at DESC) as rn
+                            FROM hubspot_enrichments
+                            WHERE hubspot_object_id IS NOT NULL
+                        ) ranked
+                        WHERE rn = 1
+                    )
+                """))
+                # Handle records with NULL hubspot_object_id separately
+                conn.execute(text("""
+                    UPDATE hubspot_enrichments 
+                    SET is_active = TRUE 
+                    WHERE id IN (
+                        SELECT id FROM (
+                            SELECT id, 
                                    ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY created_at DESC) as rn
                             FROM hubspot_enrichments
+                            WHERE hubspot_object_id IS NULL
                         ) ranked
                         WHERE rn = 1
                     )
