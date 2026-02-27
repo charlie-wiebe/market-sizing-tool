@@ -1,10 +1,11 @@
 import threading
-from datetime import datetime
-from models.database import db, Job, Company, PersonCount, HubSpotEnrichment
+from datetime import datetime, timedelta
+from models.database import db, Job, Company, PersonCount, HubSpotEnrichment, CompanyJobReference
 from services.prospeo_client import ProspeoClient
 from services.domain_utils import registrable_root_domain
 from services.query_segmenter import QuerySegmenter
 from services.hubspot_client import HubSpotClient
+from sqlalchemy import and_, or_
 
 class MarketSizingJob:
     def __init__(self, job_id):
@@ -57,63 +58,155 @@ class MarketSizingJob:
             logger.error(f"JOB {self.job_id}: Thread traceback: {traceback.format_exc()}")
 
     def _execute(self, job):
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Reset client tracking stats for this job
+        self.client.reset_tracking_stats()
+        
+        # Log job configuration
+        logger.info(f"JOB {job.id}: Starting execution with deduplication settings:")
+        logger.info(f"  Skip existing companies: {job.skip_existing_companies}")
+        logger.info(f"  Skip existing person counts: {job.skip_existing_person_counts}")
+        logger.info(f"  Skip existing HubSpot: {job.skip_existing_hubspot}")
+        logger.info(f"  Max data age: {job.max_data_age_days} days")
+        
+        # Create execution plan with enhanced logging
+        logger.info(f"JOB {job.id}: Creating segmentation plan...")
         plan = self.segmenter.create_execution_plan(job.company_filters)
         
         if plan["error"]:
             job.error_message = f"Segmentation failed: {plan.get('error_code')}"
+            logger.error(f"JOB {job.id}: {job.error_message}")
             return
+        
+        # Log segmentation plan details
+        logger.info(f"JOB {job.id}: Segmentation plan created:")
+        logger.info(f"  Total estimated companies: {plan['total_estimated']}")
+        logger.info(f"  Number of segments: {len(plan['segments'])}")
+        logger.info(f"  Estimated credits: {plan['credits_estimate']}")
+        
+        for i, segment in enumerate(plan["segments"]):
+            logger.info(f"  Segment {i+1}: {segment['estimated_count']} companies, {segment['pages']} pages")
         
         job.total_companies = plan["total_estimated"]
         job.estimated_credits = plan["credits_estimate"]
         db.session.commit()
         
+        # Get existing companies for potential pre-filtering
+        existing_companies_for_exclusion = []
+        if job.skip_existing_companies:
+            existing_companies_for_exclusion = self._get_existing_companies_for_exclusion(job)
+            logger.info(f"JOB {job.id}: Found {len(existing_companies_for_exclusion)} existing companies for exclusion")
+        
         credits_used = 0
         companies_processed = 0
+        companies_skipped = 0
         
-        for segment in plan["segments"]:
+        for segment_idx, segment in enumerate(plan["segments"]):
             if self._stop_requested:
                 break
             
             segment_filters = segment["filters"]
             pages = segment["pages"]
             
+            logger.info(f"JOB {job.id}: Processing segment {segment_idx + 1}/{len(plan['segments'])}")
+            logger.info(f"  Segment filters: {segment_filters}")
+            logger.info(f"  Expected companies: {segment['estimated_count']}, Pages: {pages}")
+            
+            # Apply exclusion filters for this segment
+            if existing_companies_for_exclusion:
+                segment_filters = self.client.build_exclusion_filters(
+                    existing_companies_for_exclusion, segment_filters
+                )
+                logger.info(f"JOB {job.id}: Applied exclusion filters to segment {segment_idx + 1}")
+            
+            actual_companies_in_segment = 0
+            
             for page in range(1, pages + 1):
                 if self._stop_requested:
                     break
+                
+                logger.info(f"JOB {job.id}: Requesting page {page}/{pages} of segment {segment_idx + 1}")
                 
                 response = self.client.search_companies(segment_filters, page=page)
                 credits_used += 1
                 
                 if self.client.is_error(response):
+                    logger.warning(f"JOB {job.id}: Page {page} failed: {self.client.get_error_code(response)}")
                     continue
                 
                 companies_data = self.client.extract_companies(response)
+                page_companies = len(companies_data)
+                actual_companies_in_segment += page_companies
                 
-                for company_data in companies_data:
+                logger.info(f"JOB {job.id}: Page {page} returned {page_companies} companies")
+                
+                for company_idx, company_data in enumerate(companies_data):
                     if self._stop_requested:
                         break
                     
+                    # Check if company already exists globally
+                    existing_company = None
+                    if job.skip_existing_companies:
+                        existing_company = self._find_existing_company_globally(company_data)
+                        
+                        if existing_company:
+                            # Link existing company to this job
+                            self._link_existing_company_to_job(existing_company, job.id)
+                            companies_skipped += 1
+                            
+                            if companies_skipped % 50 == 0:
+                                logger.info(f"JOB {job.id}: Skipped {companies_skipped} existing companies so far")
+                            continue
+                    
+                    # Save new company
                     company = self._save_company(job.id, company_data)
                     
+                    # Process person counts if needed
                     if job.person_filters:
-                        credits_used += self._process_person_counts(job, company)
+                        person_credits = self._process_person_counts(job, company)
+                        credits_used += person_credits
                     
                     companies_processed += 1
+                    
+                    # Log progress periodically
+                    if companies_processed % 100 == 0:
+                        logger.info(f"JOB {job.id}: Progress - Processed: {companies_processed}, "
+                                   f"Skipped: {companies_skipped}, Credits: {credits_used}")
+                        
+                        # Log client tracking stats
+                        stats = self.client.get_tracking_stats()
+                        logger.info(f"JOB {job.id}: Client stats - Requests: {stats['total_requests']}, "
+                                   f"Companies collected: {stats['total_companies_collected']}, "
+                                   f"Rate limit delay: {stats['total_rate_limit_delay']:.2f}s")
+                    
                     job.processed_companies = companies_processed
+                    job.companies_skipped = companies_skipped
                     job.actual_credits = credits_used
                     
                     if companies_processed % 10 == 0:
                         db.session.commit()
                 
                 db.session.commit()
+            
+            logger.info(f"JOB {job.id}: Segment {segment_idx + 1} completed - "
+                       f"Expected: {segment['estimated_count']}, Actual: {actual_companies_in_segment}")
+        
+        # Final statistics
+        final_stats = self.client.get_tracking_stats()
+        logger.info(f"JOB {job.id}: Collection phase completed:")
+        logger.info(f"  Total companies processed: {companies_processed}")
+        logger.info(f"  Total companies skipped: {companies_skipped}")
+        logger.info(f"  Total API requests: {final_stats['total_requests']}")
+        logger.info(f"  Total rate limit delay: {final_stats['total_rate_limit_delay']:.2f}s")
+        logger.info(f"  Credits used: {credits_used}")
         
         # Run HubSpot enrichment for detailed jobs
         if job.mode == 'detailed':
             try:
                 self._enrich_companies_with_hubspot(job)
             except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.error(f"HubSpot enrichment failed for job {job.id}: {e}")
                 # Continue job processing even if HubSpot enrichment fails completely
 
@@ -204,16 +297,117 @@ class MarketSizingJob:
         company.naics_codes = data.get("naics_codes") or company.naics_codes
         company.linkedin_id = data.get("linkedin_id") or company.linkedin_id
 
+    def _get_existing_companies_for_exclusion(self, job):
+        """Get existing companies for building exclusion filters."""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        max_age = datetime.utcnow() - timedelta(days=job.max_data_age_days)
+        
+        # Get companies from recent jobs with similar filters
+        existing_companies = db.session.query(Company).filter(
+            Company.created_at >= max_age,
+            Company.prospeo_company_id.isnot(None)
+        ).limit(500).all()  # Limit to 500 due to Prospeo API constraints
+        
+        # Convert to format suitable for exclusion filters
+        exclusion_data = []
+        for company in existing_companies:
+            exclusion_data.append({
+                'name': company.name,
+                'website': company.website,
+                'domain': company.domain,
+                'prospeo_company_id': company.prospeo_company_id
+            })
+        
+        logger.info(f"JOB {job.id}: Prepared {len(exclusion_data)} companies for exclusion filters")
+        return exclusion_data
+    
+    def _find_existing_company_globally(self, company_data):
+        """Find existing company by prospeo_company_id, domain, or name."""
+        prospeo_id = company_data.get("company_id")
+        domain = company_data.get("domain") or company_data.get("website", "")
+        name = company_data.get("name", "")
+        
+        # Primary lookup: by prospeo_company_id
+        if prospeo_id:
+            existing = Company.query.filter_by(prospeo_company_id=prospeo_id).first()
+            if existing:
+                return existing
+        
+        # Secondary lookup: by domain (if available)
+        if domain:
+            root_domain = registrable_root_domain(domain)
+            if root_domain:
+                existing = Company.query.filter(
+                    or_(
+                        Company.domain == root_domain,
+                        Company.website == root_domain,
+                        Company.domain.like(f'%{root_domain}'),
+                        Company.website.like(f'%{root_domain}')
+                    )
+                ).first()
+                if existing:
+                    return existing
+        
+        # Tertiary lookup: by exact name match (if name is unique enough)
+        if name and len(name) > 3:
+            existing = Company.query.filter_by(name=name).first()
+            if existing:
+                return existing
+        
+        return None
+    
+    def _link_existing_company_to_job(self, company, job_id):
+        """Create a reference linking an existing company to the current job."""
+        # Check if reference already exists
+        existing_ref = CompanyJobReference.query.filter_by(
+            company_id=company.id,
+            job_id=job_id
+        ).first()
+        
+        if not existing_ref:
+            ref = CompanyJobReference(
+                company_id=company.id,
+                job_id=job_id
+            )
+            db.session.add(ref)
+            db.session.flush()
+
     def _process_person_counts(self, job, company):
         credits_used = 0
+        person_counts_skipped = 0
         
         root_domain = registrable_root_domain(company.domain or "")
         if not root_domain:
             return credits_used
         
+        import logging
+        logger = logging.getLogger(__name__)
+        
         for person_config in job.person_filters:
             query_name = person_config.get("name", "Unnamed Query")
             filters = dict(person_config.get("filters", {}))
+            
+            # Check for existing person count data
+            if job.skip_existing_person_counts:
+                existing_count = self._find_existing_person_count(company, query_name, job.max_data_age_days)
+                if existing_count:
+                    logger.debug(f"Skipping person count for {company.name} - {query_name}: existing data found")
+                    
+                    # Create a reference to the existing data for this job
+                    person_count_ref = PersonCount(
+                        company_id=company.id,
+                        job_id=job.id,
+                        query_name=query_name,
+                        total_count=existing_count.total_count,
+                        status=existing_count.status,
+                        error_code=existing_count.error_code,
+                        prospeo_company_id=company.prospeo_company_id
+                    )
+                    db.session.add(person_count_ref)
+                    person_counts_skipped += 1
+                    continue
             
             if "company" not in filters:
                 filters["company"] = {}
@@ -222,6 +416,7 @@ class MarketSizingJob:
             
             filters["company"]["websites"]["include"] = [root_domain]
             
+            logger.debug(f"Fetching person count for {company.name} - {query_name}")
             response = self.client.search_people(filters, page=1)
             credits_used += 1
             
@@ -235,6 +430,9 @@ class MarketSizingJob:
                 status = "error"
                 error_code = self.client.get_error_code(response)
                 total_count = 0
+                logger.warning(f"Person count failed for {company.name} - {query_name}: {error_code}")
+            else:
+                logger.debug(f"Person count for {company.name} - {query_name}: {total_count}")
             
             person_count = PersonCount(
                 company_id=company.id,
@@ -247,7 +445,53 @@ class MarketSizingJob:
             )
             db.session.add(person_count)
         
+        # Update job tracking
+        if person_counts_skipped > 0:
+            job.person_counts_skipped = (job.person_counts_skipped or 0) + person_counts_skipped
+            logger.info(f"JOB {job.id}: Skipped {person_counts_skipped} person count queries (existing data)")
+        
         return credits_used
+    
+    def _find_existing_person_count(self, company, query_name, max_age_days):
+        """Find existing person count data for a company and query within age limit."""
+        max_age = datetime.utcnow() - timedelta(days=max_age_days)
+        
+        # Look for existing person count by company identifiers
+        existing = None
+        
+        # Primary: by prospeo_company_id and query name
+        if company.prospeo_company_id:
+            existing = PersonCount.query.filter(
+                PersonCount.prospeo_company_id == company.prospeo_company_id,
+                PersonCount.query_name == query_name,
+                PersonCount.created_at >= max_age,
+                PersonCount.status == 'ok'
+            ).first()
+        
+        # Secondary: by company domain/website and query name
+        if not existing and (company.domain or company.website):
+            root_domain = registrable_root_domain(company.domain or company.website or "")
+            if root_domain:
+                # Find companies with same domain
+                related_companies = Company.query.filter(
+                    or_(
+                        Company.domain == root_domain,
+                        Company.website == root_domain,
+                        Company.domain.like(f'%{root_domain}'),
+                        Company.website.like(f'%{root_domain}')
+                    )
+                ).all()
+                
+                if related_companies:
+                    company_ids = [c.id for c in related_companies]
+                    existing = PersonCount.query.filter(
+                        PersonCount.company_id.in_(company_ids),
+                        PersonCount.query_name == query_name,
+                        PersonCount.created_at >= max_age,
+                        PersonCount.status == 'ok'
+                    ).first()
+        
+        return existing
 
     def _enrich_companies_with_hubspot(self, job):
         """Enrich companies with HubSpot data using batch processing."""
@@ -267,13 +511,48 @@ class MarketSizingJob:
                     logger.info(f"HubSpot enrichment skipped for job {job.id} - client initialization failed")
                     return
             
-            # Get all companies for this job
-            companies = Company.query.filter_by(job_id=job.id).all()
-            if not companies:
+            # Get all companies for this job that need enrichment
+            all_companies = Company.query.filter_by(job_id=job.id).all()
+            if not all_companies:
                 logger.info(f"No companies to enrich with HubSpot for job {job.id}")
                 return
             
-            logger.info(f"Found {len(companies)} companies to enrich with HubSpot for job {job.id}")
+            # Filter companies based on deduplication settings
+            companies_to_enrich = []
+            hubspot_skipped = 0
+            
+            for company in all_companies:
+                if job.skip_existing_hubspot:
+                    existing_enrichment = self._find_existing_hubspot_enrichment(company, job.max_data_age_days)
+                    if existing_enrichment:
+                        logger.debug(f"Skipping HubSpot enrichment for {company.name}: existing data found")
+                        
+                        # Create reference to existing enrichment for this job
+                        hubspot_ref = HubSpotEnrichment(
+                            company_id=company.id,
+                            job_id=job.id,
+                            hubspot_object_id=existing_enrichment.hubspot_object_id,
+                            vertical=existing_enrichment.vertical,
+                            lookup_method=existing_enrichment.lookup_method,
+                            hubspot_created_date=existing_enrichment.hubspot_created_date
+                        )
+                        db.session.add(hubspot_ref)
+                        hubspot_skipped += 1
+                        continue
+                
+                companies_to_enrich.append(company)
+            
+            # Update job tracking
+            if hubspot_skipped > 0:
+                job.hubspot_skipped = (job.hubspot_skipped or 0) + hubspot_skipped
+                logger.info(f"JOB {job.id}: Skipped {hubspot_skipped} HubSpot enrichments (existing data)")
+                db.session.commit()
+            
+            if not companies_to_enrich:
+                logger.info(f"No new companies need HubSpot enrichment for job {job.id} (all have existing data)")
+                return
+            
+            logger.info(f"Found {len(companies_to_enrich)} companies to enrich with HubSpot for job {job.id}")
             
             # Check if HubSpot client is enabled
             if not self.hubspot_client.enabled:
@@ -284,11 +563,11 @@ class MarketSizingJob:
             batch_size = 50
             total_enriched = 0
             
-            for i in range(0, len(companies), batch_size):
+            for i in range(0, len(companies_to_enrich), batch_size):
                 if self._stop_requested:
                     break
                 
-                batch = companies[i:i + batch_size]
+                batch = companies_to_enrich[i:i + batch_size]
                 
                 # Prepare batch data for HubSpot client
                 batch_data = []
@@ -298,6 +577,8 @@ class MarketSizingJob:
                         'linkedin_url': company.linkedin_url,
                         'domain': company.domain
                     })
+                
+                logger.info(f"JOB {job.id}: Processing HubSpot enrichment batch {len(batch_data)} companies")
                 
                 # Get HubSpot enrichments for this batch
                 enrichments = self.hubspot_client.batch_enrich_companies(batch_data)
@@ -318,13 +599,54 @@ class MarketSizingJob:
                 
                 # Commit batch results
                 db.session.commit()
-                logger.info(f"Processed HubSpot enrichment batch {i//batch_size + 1}/{(len(companies) + batch_size - 1)//batch_size}")
+                logger.info(f"Processed HubSpot enrichment batch {i//batch_size + 1}/{(len(companies_to_enrich) + batch_size - 1)//batch_size}")
             
-            logger.info(f"HubSpot enrichment completed: {total_enriched} companies enriched out of {len(companies)}")
+            logger.info(f"HubSpot enrichment completed: {total_enriched} companies enriched out of {len(companies_to_enrich)} (skipped {hubspot_skipped})")
             
         except Exception as e:
             logger.error(f"HubSpot enrichment failed: {e}")
             # Continue job processing even if HubSpot enrichment fails
+    
+    def _find_existing_hubspot_enrichment(self, company, max_age_days):
+        """Find existing HubSpot enrichment data for a company within age limit."""
+        max_age = datetime.utcnow() - timedelta(days=max_age_days)
+        
+        # Look for existing enrichment by company identifiers
+        existing = None
+        
+        # Primary: by company_id
+        existing = HubSpotEnrichment.query.filter(
+            HubSpotEnrichment.company_id == company.id,
+            HubSpotEnrichment.created_at >= max_age,
+            HubSpotEnrichment.hubspot_object_id.isnot(None)
+        ).first()
+        
+        if existing:
+            return existing
+        
+        # Secondary: by domain/website across all companies
+        if company.domain or company.website:
+            root_domain = registrable_root_domain(company.domain or company.website or "")
+            if root_domain:
+                # Find companies with same domain that have HubSpot enrichment
+                related_companies = Company.query.filter(
+                    or_(
+                        Company.domain == root_domain,
+                        Company.website == root_domain,
+                        Company.domain.like(f'%{root_domain}'),
+                        Company.website.like(f'%{root_domain}')
+                    )
+                ).all()
+                
+                if related_companies:
+                    company_ids = [c.id for c in related_companies]
+                    existing = HubSpotEnrichment.query.filter(
+                        HubSpotEnrichment.company_id.in_(company_ids),
+                        HubSpotEnrichment.created_at >= max_age,
+                        HubSpotEnrichment.hubspot_object_id.isnot(None)
+                    ).first()
+        
+        return existing
 
 
 def start_job_async(job_id, app):

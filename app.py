@@ -29,6 +29,17 @@ with app.app_context():
             conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS query_fingerprint VARCHAR(32)"))
             conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'quick_tam'"))
             conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS aggregate_results JSON"))
+            
+            # Deduplication tracking columns
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS companies_skipped INTEGER DEFAULT 0"))
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS person_counts_skipped INTEGER DEFAULT 0"))
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS hubspot_skipped INTEGER DEFAULT 0"))
+            
+            # Deduplication settings columns
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS skip_existing_companies BOOLEAN DEFAULT true"))
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS skip_existing_person_counts BOOLEAN DEFAULT true"))
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS skip_existing_hubspot BOOLEAN DEFAULT true"))
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS max_data_age_days INTEGER DEFAULT 30"))
             for col in ['sample_titles', 'sample_names', 'query_filters']:
                 conn.execute(text(f"ALTER TABLE person_counts DROP COLUMN IF EXISTS {col}"))
             
@@ -246,6 +257,18 @@ def preview():
         else:
             aggregate_person_counts[query_name] = 0
     
+    # Calculate potential credit savings from deduplication
+    max_age = datetime.utcnow() - timedelta(days=30)  # Default to 30 days
+    existing_companies_count = Company.query.filter(
+        Company.created_at >= max_age,
+        Company.prospeo_company_id.isnot(None)
+    ).count()
+    
+    # Estimate potential savings (conservative estimate)
+    potential_duplicate_ratio = min(0.7, existing_companies_count / max(1, total_companies))
+    estimated_company_savings = int(total_companies * potential_duplicate_ratio)
+    estimated_credit_savings = estimated_company_savings * (1 + person_queries)  # Company + person searches
+    
     return jsonify({
         "error": False,
         "company_count": total_companies,
@@ -264,6 +287,12 @@ def preview():
         "credits": {
             "quick_tam": quick_credits,
             "detailed": detailed_credits
+        },
+        "deduplication_estimate": {
+            "existing_companies_in_db": existing_companies_count,
+            "estimated_duplicates": estimated_company_savings,
+            "estimated_credit_savings": estimated_credit_savings,
+            "potential_savings_percentage": round(potential_duplicate_ratio * 100, 1)
         }
     })
 
@@ -277,13 +306,23 @@ def create_job():
     mode = data.get("mode", "quick_tam")  # Default to quick_tam
     fingerprint = generate_query_fingerprint(company_filters, person_filters)
     
+    # Deduplication settings (with defaults)
+    skip_existing_companies = data.get("skip_existing_companies", True)
+    skip_existing_person_counts = data.get("skip_existing_person_counts", True)  
+    skip_existing_hubspot = data.get("skip_existing_hubspot", True)
+    max_data_age_days = data.get("max_data_age_days", 30)
+    
     job = Job(
         name=data.get("name", f"Job {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"),
         status="pending",
         company_filters=company_filters,
         person_filters=person_filters,
         mode=mode,
-        query_fingerprint=fingerprint
+        query_fingerprint=fingerprint,
+        skip_existing_companies=skip_existing_companies,
+        skip_existing_person_counts=skip_existing_person_counts,
+        skip_existing_hubspot=skip_existing_hubspot,
+        max_data_age_days=max_data_age_days
     )
     db.session.add(job)
     db.session.commit()
@@ -419,6 +458,10 @@ def get_job_results(job_id):
     
     aggregates = {name: total for name, total in person_counts_agg}
     
+    # Calculate deduplication statistics
+    total_companies_found = Company.query.filter_by(job_id=job_id).count()
+    total_company_references = CompanyJobReference.query.filter_by(job_id=job_id).count()
+    
     return jsonify({
         "job": job.to_dict(),
         "companies": results,
@@ -431,6 +474,15 @@ def get_job_results(job_id):
         "aggregates": {
             "total_companies": job.processed_companies,
             "person_counts": aggregates
+        },
+        "deduplication_stats": {
+            "companies_processed": job.processed_companies or 0,
+            "companies_skipped": job.companies_skipped or 0,
+            "person_counts_skipped": job.person_counts_skipped or 0,
+            "hubspot_skipped": job.hubspot_skipped or 0,
+            "total_companies_in_job": total_companies_found,
+            "total_company_references": total_company_references,
+            "credit_savings_estimate": (job.companies_skipped or 0) + (job.person_counts_skipped or 0)
         }
     })
 

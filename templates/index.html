@@ -127,6 +127,56 @@
                     </div>
                 </div>
 
+                <!-- Deduplication Settings -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="shield-check" class="w-5 h-5"></i>
+                        Deduplication Settings
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div class="flex items-start gap-3">
+                            <input type="checkbox" id="skip_existing_companies" checked class="mt-1">
+                            <div>
+                                <label for="skip_existing_companies" class="font-medium text-sm cursor-pointer">Skip Existing Companies</label>
+                                <p class="text-xs text-gray-600 mt-1">
+                                    Avoid re-processing companies that already exist in the database (saves credits)
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start gap-3">
+                            <input type="checkbox" id="skip_existing_person_counts" checked class="mt-1">
+                            <div>
+                                <label for="skip_existing_person_counts" class="font-medium text-sm cursor-pointer">Skip Existing Person Counts</label>
+                                <p class="text-xs text-gray-600 mt-1">
+                                    Skip person count queries for companies that already have recent data (saves credits)
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start gap-3">
+                            <input type="checkbox" id="skip_existing_hubspot" checked class="mt-1">
+                            <div>
+                                <label for="skip_existing_hubspot" class="font-medium text-sm cursor-pointer">Skip Existing HubSpot Data</label>
+                                <p class="text-xs text-gray-600 mt-1">
+                                    Skip HubSpot enrichment for companies that already have recent data
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start gap-3">
+                            <label for="max_data_age_days" class="font-medium text-sm w-40 mt-2">Max Data Age (days):</label>
+                            <div>
+                                <input type="number" id="max_data_age_days" value="30" min="1" max="365" class="border rounded px-3 py-1 w-20 text-sm">
+                                <p class="text-xs text-gray-600 mt-1">
+                                    Consider existing data "fresh" if it's newer than this many days
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Actions -->
                 <div class="flex gap-4">
                     <button onclick="runPreview()" class="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 flex items-center gap-2">
@@ -616,6 +666,16 @@
         
         function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
         
+        // ========== Deduplication Settings ==========
+        function getDeduplicationSettings() {
+            return {
+                skip_existing_companies: document.getElementById('skip_existing_companies').checked,
+                skip_existing_person_counts: document.getElementById('skip_existing_person_counts').checked,
+                skip_existing_hubspot: document.getElementById('skip_existing_hubspot').checked,
+                max_data_age_days: parseInt(document.getElementById('max_data_age_days').value) || 30
+            };
+        }
+        
         // ========== Search Mode + Start Job ==========
         function getSelectedMode() {
             return document.querySelector('input[name="search_mode"]:checked').value;
@@ -624,6 +684,7 @@
         async function startJob() {
             const companyFilters = getCompanyFilters();
             const personFilters = getPersonFilters();
+            const dedupeSettings = getDeduplicationSettings();
             
             try {
                 const mode = getSelectedMode();
@@ -653,7 +714,13 @@
                 const response = await fetch('/api/jobs', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: jobName, company_filters: companyFilters, person_filters: personFilters, mode: mode })
+                    body: JSON.stringify({ 
+                        name: jobName, 
+                        company_filters: companyFilters, 
+                        person_filters: personFilters, 
+                        mode: mode,
+                        ...dedupeSettings
+                    })
                 });
                 
                 const job = await response.json();

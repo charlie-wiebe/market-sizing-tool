@@ -34,7 +34,19 @@ class Job(db.Model):
     completed_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # Deduplication tracking
+    companies_skipped = db.Column(db.Integer, default=0)
+    person_counts_skipped = db.Column(db.Integer, default=0)
+    hubspot_skipped = db.Column(db.Integer, default=0)
+    
+    # Deduplication settings
+    skip_existing_companies = db.Column(db.Boolean, default=True)
+    skip_existing_person_counts = db.Column(db.Boolean, default=True)
+    skip_existing_hubspot = db.Column(db.Boolean, default=True)
+    max_data_age_days = db.Column(db.Integer, default=30)
+    
     companies = db.relationship('Company', backref='job', lazy='dynamic')
+    company_references = db.relationship('CompanyJobReference', backref='job', lazy='dynamic')
     
     def to_dict(self):
         return {
@@ -53,7 +65,17 @@ class Job(db.Model):
             'started_at': self.started_at.isoformat() if self.started_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'progress_pct': round(self.processed_companies / self.total_companies * 100, 1) if self.total_companies > 0 else 0
+            'progress_pct': round(self.processed_companies / self.total_companies * 100, 1) if self.total_companies > 0 else 0,
+            # Deduplication statistics
+            'companies_skipped': self.companies_skipped or 0,
+            'person_counts_skipped': self.person_counts_skipped or 0,
+            'hubspot_skipped': self.hubspot_skipped or 0,
+            'skip_existing_companies': self.skip_existing_companies,
+            'skip_existing_person_counts': self.skip_existing_person_counts,
+            'skip_existing_hubspot': self.skip_existing_hubspot,
+            'max_data_age_days': self.max_data_age_days,
+            'total_skipped': (self.companies_skipped or 0) + (self.person_counts_skipped or 0) + (self.hubspot_skipped or 0),
+            'estimated_credit_savings': (self.companies_skipped or 0) + (self.person_counts_skipped or 0)
         }
 
 
@@ -217,15 +239,26 @@ class HubSpotEnrichment(db.Model):
     lookup_method = db.Column(db.String(50))  # 'linkedin_handle', 'domain', or 'both_match'
     hubspot_created_date = db.Column(db.DateTime)  # For duplicate resolution
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class CompanyJobReference(db.Model):
+    __tablename__ = 'company_job_references'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
+    job_id = db.Column(db.Integer, db.ForeignKey('jobs.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Unique constraint to prevent duplicate references
+    __table_args__ = (db.UniqueConstraint('company_id', 'job_id', name='unique_company_job'),)
+    
+    # Relationships
+    company = db.relationship('Company', backref='job_references')
     
     def to_dict(self):
         return {
             'id': self.id,
             'company_id': self.company_id,
             'job_id': self.job_id,
-            'hubspot_object_id': self.hubspot_object_id,
-            'vertical': self.vertical,
-            'lookup_method': self.lookup_method,
-            'hubspot_created_date': self.hubspot_created_date.isoformat() if self.hubspot_created_date else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
