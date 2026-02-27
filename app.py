@@ -53,37 +53,9 @@ with app.app_context():
             conn.execute(text("ALTER TABLE person_counts ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE"))
             conn.execute(text("ALTER TABLE hubspot_enrichments ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE"))
             
-            # Proper active record deduplication - only latest record per group should be active
-            
-            # First, set all records to inactive
-            conn.execute(text("UPDATE person_counts SET is_active = FALSE WHERE is_active IS NULL"))
-            conn.execute(text("UPDATE hubspot_enrichments SET is_active = FALSE WHERE is_active IS NULL"))
-            
-            # PersonCount: Set only the latest record per (company_id, query_name) to active
-            conn.execute(text("""
-                UPDATE person_counts SET is_active = TRUE WHERE id IN (
-                    SELECT id FROM (
-                        SELECT id, ROW_NUMBER() OVER (
-                            PARTITION BY company_id, query_name 
-                            ORDER BY created_at DESC
-                        ) as rn
-                        FROM person_counts
-                    ) ranked WHERE rn = 1
-                )
-            """))
-            
-            # HubSpot: Set only the latest record per company_id to active  
-            conn.execute(text("""
-                UPDATE hubspot_enrichments SET is_active = TRUE WHERE id IN (
-                    SELECT id FROM (
-                        SELECT id, ROW_NUMBER() OVER (
-                            PARTITION BY company_id 
-                            ORDER BY created_at DESC
-                        ) as rn
-                        FROM hubspot_enrichments
-                    ) ranked WHERE rn = 1
-                )
-            """))
+            # Set existing NULL records to active (safe default for new columns)
+            conn.execute(text("UPDATE person_counts SET is_active = TRUE WHERE is_active IS NULL"))
+            conn.execute(text("UPDATE hubspot_enrichments SET is_active = TRUE WHERE is_active IS NULL"))
             
             # Create indexes for performance
             conn.execute(text("CREATE INDEX IF NOT EXISTS idx_person_counts_is_active ON person_counts(is_active)"))
