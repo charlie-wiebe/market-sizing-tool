@@ -71,9 +71,12 @@ class MarketSizingJob:
         logger.info(f"  Skip existing HubSpot: {job.skip_existing_hubspot}")
         logger.info(f"  Max data age: {job.max_data_age_days} days")
         
+        # Normalize company search filters
+        normalized_company_filters = self._prepare_company_search_filters(job.company_filters)
+        
         # Create execution plan with enhanced logging
         logger.info(f"JOB {job.id}: Creating segmentation plan...")
-        plan = self.segmenter.create_execution_plan(job.company_filters)
+        plan = self.segmenter.create_execution_plan(normalized_company_filters)
         
         if plan["error"]:
             job.error_message = f"Segmentation failed: {plan.get('error_code')}"
@@ -302,11 +305,9 @@ class MarketSizingJob:
         import logging
         logger = logging.getLogger(__name__)
         
-        max_age = datetime.utcnow() - timedelta(days=job.max_data_age_days)
-        
-        # Get companies from recent jobs with similar filters
+        # Use all-or-nothing approach - no age filtering for companies
+        # Get all companies with prospeo_company_id
         existing_companies = db.session.query(Company).filter(
-            Company.created_at >= max_age,
             Company.prospeo_company_id.isnot(None)
         ).limit(500).all()  # Limit to 500 due to Prospeo API constraints
         
@@ -322,6 +323,42 @@ class MarketSizingJob:
         
         logger.info(f"JOB {job.id}: Prepared {len(exclusion_data)} companies for exclusion filters")
         return exclusion_data
+    
+    def _prepare_company_search_filters(self, company_filters):
+        """Apply location normalization to company search filters using Search Suggestions API."""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        if not company_filters:
+            return company_filters
+            
+        normalized_filters = dict(company_filters)
+        
+        # Handle company location search normalization
+        if "company_location_search" in normalized_filters:
+            location_search = normalized_filters["company_location_search"]
+            
+            # Normalize include locations
+            if "include" in location_search and isinstance(location_search["include"], list):
+                normalized_includes = []
+                for location in location_search["include"]:
+                    resolved = self.client.resolve_location_format(location)
+                    normalized_includes.append(resolved)
+                    if resolved != location:
+                        logger.info(f"Normalized company location '{location}' -> '{resolved}'")
+                location_search["include"] = normalized_includes
+            
+            # Normalize exclude locations
+            if "exclude" in location_search and isinstance(location_search["exclude"], list):
+                normalized_excludes = []
+                for location in location_search["exclude"]:
+                    resolved = self.client.resolve_location_format(location)
+                    normalized_excludes.append(resolved)
+                    if resolved != location:
+                        logger.info(f"Normalized company location exclude '{location}' -> '{resolved}'")
+                location_search["exclude"] = normalized_excludes
+        
+        return normalized_filters
     
     def _find_existing_company_globally(self, company_data):
         """Find existing company by prospeo_company_id, domain, or name."""
@@ -501,7 +538,15 @@ class MarketSizingJob:
         return result
     
     def _save_person_count_result(self, job, company, query_name, result):
-        """Save person count result to database"""
+        """Save person count result to database with active record management"""
+        # Set previous records for this company and query to inactive
+        PersonCount.query.filter(
+            PersonCount.company_id == company.id,
+            PersonCount.query_name == query_name,
+            PersonCount.is_active == True
+        ).update({"is_active": False})
+        
+        # Create new active record
         person_count = PersonCount(
             company_id=company.id,
             job_id=job.id,
@@ -509,7 +554,8 @@ class MarketSizingJob:
             total_count=result.get("total_count", 0),
             status=result.get("status", "ok"),
             error_code=result.get("error_code"),
-            prospeo_company_id=company.prospeo_company_id
+            prospeo_company_id=company.prospeo_company_id,
+            is_active=True  # New record is active by default
         )
         db.session.add(person_count)
     
@@ -526,7 +572,8 @@ class MarketSizingJob:
                 PersonCount.prospeo_company_id == company.prospeo_company_id,
                 PersonCount.query_name == query_name,
                 PersonCount.created_at >= max_age,
-                PersonCount.status == 'ok'
+                PersonCount.status == 'ok',
+                PersonCount.is_active == True
             ).first()
         
         # Secondary: by company domain/website and query name
@@ -549,7 +596,8 @@ class MarketSizingJob:
                         PersonCount.company_id.in_(company_ids),
                         PersonCount.query_name == query_name,
                         PersonCount.created_at >= max_age,
-                        PersonCount.status == 'ok'
+                        PersonCount.status == 'ok',
+                        PersonCount.is_active == True
                     ).first()
         
         return existing
@@ -644,16 +692,24 @@ class MarketSizingJob:
                 # Get HubSpot enrichments for this batch
                 enrichments = self.hubspot_client.batch_enrich_companies(batch_data)
                 
-                # Save enrichment results to database
+                # Save enrichment results to database with active record management
                 for company_id, enrichment_data in enrichments.items():
                     if enrichment_data:
+                        # Set previous HubSpot enrichments for this company to inactive
+                        HubSpotEnrichment.query.filter(
+                            HubSpotEnrichment.company_id == company_id,
+                            HubSpotEnrichment.is_active == True
+                        ).update({"is_active": False})
+                        
+                        # Create new active enrichment record
                         hubspot_enrichment = HubSpotEnrichment(
                             company_id=company_id,
                             job_id=job.id,
                             hubspot_object_id=enrichment_data['hubspot_object_id'],
                             vertical=enrichment_data['vertical'],
                             lookup_method=enrichment_data['lookup_method'],
-                            hubspot_created_date=enrichment_data['hubspot_created_date']
+                            hubspot_created_date=enrichment_data['hubspot_created_date'],
+                            is_active=True  # New record is active by default
                         )
                         db.session.add(hubspot_enrichment)
                         total_enriched += 1
@@ -679,7 +735,8 @@ class MarketSizingJob:
         existing = HubSpotEnrichment.query.filter(
             HubSpotEnrichment.company_id == company.id,
             HubSpotEnrichment.created_at >= max_age,
-            HubSpotEnrichment.hubspot_object_id.isnot(None)
+            HubSpotEnrichment.hubspot_object_id.isnot(None),
+            HubSpotEnrichment.is_active == True
         ).first()
         
         if existing:
@@ -704,7 +761,8 @@ class MarketSizingJob:
                     existing = HubSpotEnrichment.query.filter(
                         HubSpotEnrichment.company_id.in_(company_ids),
                         HubSpotEnrichment.created_at >= max_age,
-                        HubSpotEnrichment.hubspot_object_id.isnot(None)
+                        HubSpotEnrichment.hubspot_object_id.isnot(None),
+                        HubSpotEnrichment.is_active == True
                     ).first()
         
         return existing

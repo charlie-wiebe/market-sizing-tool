@@ -15,6 +15,7 @@ MAX_RESULTS_PER_QUERY = 25000
 class QuerySegmenter:
     def __init__(self, prospeo_client):
         self.client = prospeo_client
+        self._normalized_countries_cache = {}
 
     def estimate_total_count(self, filters):
         response = self.client.search_companies(filters, page=1)
@@ -25,6 +26,17 @@ class QuerySegmenter:
 
     def needs_segmentation(self, total_count):
         return total_count > MAX_RESULTS_PER_QUERY
+    
+    def get_normalized_countries(self):
+        """Get normalized country names using Search Suggestions API with caching."""
+        if self._normalized_countries_cache:
+            return self._normalized_countries_cache
+        
+        for country in COUNTRIES:
+            normalized = self.client.resolve_location_format(country)
+            self._normalized_countries_cache[country] = normalized
+        
+        return self._normalized_countries_cache
 
     def generate_segments(self, base_filters, total_count):
         if total_count <= MAX_RESULTS_PER_QUERY:
@@ -36,10 +48,12 @@ class QuerySegmenter:
         has_headcount = "company_headcount_range" in base_filters
         
         if not has_location:
-            for country in COUNTRIES:
+            # Use normalized countries from Search Suggestions API
+            normalized_countries = self.get_normalized_countries()
+            for country, normalized_country in normalized_countries.items():
                 segment_filters = dict(base_filters)
                 segment_filters["company_location_search"] = {
-                    "include": [country],
+                    "include": [normalized_country],
                     "exclude": []
                 }
                 segments.append(segment_filters)

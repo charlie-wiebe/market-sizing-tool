@@ -212,6 +212,7 @@ class PersonCount(db.Model):
     total_count = db.Column(db.Integer, default=0)
     status = db.Column(db.String(20), default='ok')  # ok, error
     error_code = db.Column(db.String(50))  # INVALID_FILTERS, NO_RESULTS, etc.
+    is_active = db.Column(db.Boolean, default=True, index=True)  # Active record tracking
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def to_dict(self):
@@ -238,6 +239,7 @@ class HubSpotEnrichment(db.Model):
     vertical = db.Column(db.String(255))  # HubSpot vertical field
     lookup_method = db.Column(db.String(50))  # 'linkedin_handle', 'domain', or 'both_match'
     hubspot_created_date = db.Column(db.DateTime)  # For duplicate resolution
+    is_active = db.Column(db.Boolean, default=True, index=True)  # Active record tracking
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 

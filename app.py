@@ -58,6 +58,35 @@ segmenter = QuerySegmenter(client)
 
 running_jobs = {}
 
+def _normalize_company_filters(company_filters):
+    """Apply location normalization to company search filters."""
+    if not company_filters:
+        return company_filters
+        
+    normalized_filters = dict(company_filters)
+    
+    # Handle company location search normalization
+    if "company_location_search" in normalized_filters:
+        location_search = normalized_filters["company_location_search"]
+        
+        # Normalize include locations
+        if "include" in location_search and isinstance(location_search["include"], list):
+            normalized_includes = []
+            for location in location_search["include"]:
+                resolved = client.resolve_location_format(location)
+                normalized_includes.append(resolved)
+            location_search["include"] = normalized_includes
+        
+        # Normalize exclude locations
+        if "exclude" in location_search and isinstance(location_search["exclude"], list):
+            normalized_excludes = []
+            for location in location_search["exclude"]:
+                resolved = client.resolve_location_format(location)
+                normalized_excludes.append(resolved)
+            location_search["exclude"] = normalized_excludes
+    
+    return normalized_filters
+
 
 @app.route("/")
 def index():
@@ -110,6 +139,9 @@ def preview():
     data = request.json
     company_filters = data.get("company_filters", {})
     person_filters = data.get("person_filters", [])
+    
+    # Apply location normalization to company filters
+    company_filters = _normalize_company_filters(company_filters)
     
     # Generate fingerprint to check for existing data
     fingerprint = generate_query_fingerprint(company_filters, person_filters)
@@ -303,6 +335,9 @@ def create_job():
     
     company_filters = data.get("company_filters", {})
     person_filters = data.get("person_filters", [])
+    
+    # Apply location normalization to company filters
+    company_filters = _normalize_company_filters(company_filters)
     mode = data.get("mode", "quick_tam")  # Default to quick_tam
     fingerprint = generate_query_fingerprint(company_filters, person_filters)
     
