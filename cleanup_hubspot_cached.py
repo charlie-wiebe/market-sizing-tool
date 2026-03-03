@@ -80,61 +80,74 @@ def main():
             logger.info(f"Processing Job {job_id}")
             logger.info(f"{'='*60}")
             
-            # Get all companies for this job (no chunking needed for cache)
-            companies = session.query(Company).filter_by(job_id=job_id).all()
-            total_count = len(companies)
+            # Get total count first for progress tracking
+            total_count = session.query(Company).filter_by(job_id=job_id).count()
             logger.info(f"Found {total_count} companies for Job {job_id}")
             
             if total_count == 0:
                 logger.info(f"No companies found for Job {job_id}, skipping...")
                 continue
             
-            # Process all companies at once (cache is fast!)
-            batch_data = []
-            for company in companies:
-                batch_data.append({
-                    'id': company.id,
-                    'linkedin_url': company.linkedin_url,
-                    'domain': company.domain
-                })
-            
-            logger.info(f"Enriching {len(batch_data)} companies from cache...")
-            
-            # Get HubSpot enrichments from cache
-            enrichments = hubspot_client.batch_enrich_companies(batch_data)
-            
-            # Save enrichment results
+            # Process companies in chunks to prevent memory exhaustion
+            chunk_size = 100
             total_enriched = 0
             total_failed = 0
             
-            for company_id, enrichment_data in enrichments.items():
-                if enrichment_data:
-                    try:
-                        # Mark existing enrichments as inactive
-                        session.query(HubSpotEnrichment).filter(
-                            HubSpotEnrichment.company_id == company_id,
-                            HubSpotEnrichment.is_active == True
-                        ).update({"is_active": False})
-                        
-                        # Create new active enrichment record
-                        new_enrichment = HubSpotEnrichment(
-                            company_id=company_id,
-                            job_id=job_id,
-                            hubspot_object_id=enrichment_data['hubspot_object_id'],
-                            vertical=enrichment_data['vertical'],
-                            lookup_method=enrichment_data['lookup_method'],
-                            hubspot_created_date=enrichment_data['hubspot_created_date'],
-                            is_active=True
-                        )
-                        session.add(new_enrichment)
-                        total_enriched += 1
-                        
-                    except Exception as e:
-                        logger.error(f"Failed to save enrichment for company {company_id}: {e}")
+            for offset in range(0, total_count, chunk_size):
+                # Load chunk of companies
+                companies = session.query(Company).filter_by(job_id=job_id)\
+                    .offset(offset).limit(chunk_size).all()
+                
+                chunk_num = (offset // chunk_size) + 1
+                total_chunks = (total_count + chunk_size - 1) // chunk_size
+                logger.info(f"Processing chunk {chunk_num}/{total_chunks} " + 
+                          f"(companies {offset+1}-{min(offset+chunk_size, total_count)} of {total_count})")
+                
+                # Build batch data for this chunk
+                batch_data = []
+                for company in companies:
+                    batch_data.append({
+                        'id': company.id,
+                        'linkedin_url': company.linkedin_url,
+                        'domain': company.domain
+                    })
+                
+                # Get HubSpot enrichments from cache for this chunk
+                enrichments = hubspot_client.batch_enrich_companies(batch_data)
+                
+                # Process enrichments for this chunk
+                for company_id, enrichment_data in enrichments.items():
+                    if enrichment_data:
+                        try:
+                            # Mark existing enrichments as inactive
+                            session.query(HubSpotEnrichment).filter(
+                                HubSpotEnrichment.company_id == company_id,
+                                HubSpotEnrichment.is_active == True
+                            ).update({"is_active": False})
+                            
+                            # Create new active enrichment record
+                            new_enrichment = HubSpotEnrichment(
+                                company_id=company_id,
+                                job_id=job_id,
+                                hubspot_object_id=enrichment_data['hubspot_object_id'],
+                                vertical=enrichment_data['vertical'],
+                                lookup_method=enrichment_data['lookup_method'],
+                                hubspot_created_date=enrichment_data['hubspot_created_date'],
+                                is_active=True
+                            )
+                            session.add(new_enrichment)
+                            total_enriched += 1
+                            
+                        except Exception as e:
+                            logger.error(f"Failed to save enrichment for company {company_id}: {e}")
+                            total_failed += 1
+                    else:
+                        # No enrichment data found
                         total_failed += 1
-            
-            # Commit all results at once
-            session.commit()
+                
+                # Commit after each chunk to free memory
+                session.commit()
+                logger.info(f"Chunk {chunk_num}/{total_chunks} completed: {len(enrichments)} enrichments processed")
             
             # Calculate timing
             elapsed = (datetime.utcnow() - start_time).total_seconds()
