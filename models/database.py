@@ -257,6 +257,20 @@ class HubSpotCache(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class SyncMetadata(db.Model):
+    __tablename__ = 'sync_metadata'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    sync_type = db.Column(db.String(50), unique=True, nullable=False)
+    last_sync_timestamp = db.Column(db.DateTime)
+    last_sync_status = db.Column(db.String(50))
+    records_added = db.Column(db.Integer, default=0)
+    records_removed = db.Column(db.Integer, default=0)
+    error_message = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class CompanyJobReference(db.Model):
     __tablename__ = 'company_job_references'
     
