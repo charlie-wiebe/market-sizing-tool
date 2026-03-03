@@ -50,7 +50,10 @@ def main():
         hubspot_client = HubSpotClientCached(session=session)
         
         # Get all jobs with companies
-        jobs = session.query(Job).join(Company).distinct().order_by(Job.id).all()
+        # Note: Can't use distinct() with JSON columns, but ordering by id prevents duplicates
+        jobs_with_companies = session.query(Job.id).join(Company).group_by(Job.id).order_by(Job.id).all()
+        job_ids = [j[0] for j in jobs_with_companies]
+        jobs = session.query(Job).filter(Job.id.in_(job_ids)).order_by(Job.id).all()
         logger.info(f"Found {len(jobs)} jobs with companies to process")
         
         # Track overall statistics
