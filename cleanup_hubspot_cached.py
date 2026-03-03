@@ -69,9 +69,9 @@ def main():
                 session.commit()
                 logger.info(f"Job {job_id}: Domain normalization complete.")
         
-        # Initialize cached HubSpot client
+        # Initialize cached HubSpot client with session
         logger.info("Initializing cached HubSpot client...")
-        hubspot_client = HubSpotClientCached()
+        hubspot_client = HubSpotClientCached(session=session)
         
         # Process each job
         for job_id in target_job_ids:

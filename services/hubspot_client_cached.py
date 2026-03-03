@@ -3,35 +3,39 @@ HubSpot client with local cache support for ultra-fast lookups.
 """
 import logging
 from typing import List, Dict, Optional
-from datetime import datetime
+from models.database import HubSpotCache
 from services.linkedin_utils import extract_linkedin_handle, normalize_domain
-from models.database import HubSpotCache, db
+from sqlalchemy.orm import Session
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class HubSpotClientCached:
     """HubSpot client that uses local cache first, with API fallback."""
     
-    def __init__(self):
+    def __init__(self, session=None):
+        """Initialize the cached client."""
         self.base_url = None  # Not needed for cache-only mode
         self.api_key = None  # Not needed for cache-only mode
         self.enabled = True  # Always enabled in cache mode
         self.headers = {}
         self.timeout = 30
+        self.session = session
         
-        # Check if cache has data
-        cache_count = HubSpotCache.query.count()
-        if cache_count == 0:
-            logger.warning("HubSpot cache is empty. Run import_hubspot_csv.py first!")
-        else:
-            logger.info(f"HubSpot cache initialized with {cache_count} companies")
+        # Check if cache has data if session provided
+        if self.session:
+            cache_count = self.session.query(HubSpotCache).count()
+            if cache_count == 0:
+                logger.warning("HubSpot cache is empty. Run import_hubspot_csv.py first!")
+            else:
+                logger.info(f"HubSpot cache initialized with {cache_count} companies")
     
     def search_company_by_linkedin_handle(self, handle: str) -> List[Dict]:
         """Search cache for a LinkedIn handle. Returns list of matching records."""
-        if not handle:
+        if not handle or not self.session:
             return []
         
-        matches = HubSpotCache.query.filter_by(linkedin_handle=handle).all()
+        matches = self.session.query(HubSpotCache).filter_by(linkedin_handle=handle).all()
         results = []
         for match in matches:
             results.append({
@@ -48,7 +52,7 @@ class HubSpotClientCached:
     
     def search_company_by_domain(self, domain: str) -> List[Dict]:
         """Search cache for a domain. Returns list of matching records."""
-        if not domain:
+        if not domain or not self.session:
             return []
         
         # Normalize the domain
@@ -56,7 +60,7 @@ class HubSpotClientCached:
         if not domain:
             return []
         
-        matches = HubSpotCache.query.filter_by(domain=domain).all()
+        matches = self.session.query(HubSpotCache).filter_by(domain=domain).all()
         results = []
         for match in matches:
             results.append({
