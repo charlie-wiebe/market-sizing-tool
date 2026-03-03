@@ -2,6 +2,7 @@
 HubSpot client with local cache support for ultra-fast lookups.
 """
 import logging
+from datetime import datetime
 from typing import List, Dict, Optional
 from models.database import HubSpotCache
 from services.linkedin_utils import extract_linkedin_handle, normalize_domain
