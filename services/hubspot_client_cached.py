@@ -61,7 +61,19 @@ class HubSpotClientCached:
         if not domain:
             return []
         
-        matches = self.session.query(HubSpotCache).filter_by(domain=domain).all()
+        # Search for domain in both primary domain and additional domains
+        from sqlalchemy import or_
+        matches = self.session.query(HubSpotCache).filter(
+            or_(
+                HubSpotCache.domain == domain,
+                # Check if domain appears in semicolon-separated list
+                HubSpotCache.hs_additional_domains.like(f'%;{domain};%'),  # Middle
+                HubSpotCache.hs_additional_domains.like(f'{domain};%'),     # Start
+                HubSpotCache.hs_additional_domains.like(f'%;{domain}'),     # End
+                HubSpotCache.hs_additional_domains == domain                # Only value
+            )
+        ).all()
+        
         results = []
         for match in matches:
             results.append({
@@ -69,6 +81,7 @@ class HubSpotClientCached:
                 'properties': {
                     'hs_object_id': match.hubspot_object_id,
                     'domain': match.domain,
+                    'hs_additional_domains': match.hs_additional_domains,
                     'hs_linkedin_handle': match.linkedin_handle,
                     'vertical': match.vertical,
                     'createdate': int(match.hubspot_created_date.timestamp() * 1000) if match.hubspot_created_date else None

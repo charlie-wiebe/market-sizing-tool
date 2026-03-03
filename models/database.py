@@ -249,6 +249,7 @@ class HubSpotCache(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     hubspot_object_id = db.Column(db.String(100), unique=True, nullable=False, index=True)
     domain = db.Column(db.String(255), index=True)
+    hs_additional_domains = db.Column(db.Text)  # Semicolon-separated list of additional domains
     linkedin_handle = db.Column(db.String(255), index=True)
     vertical = db.Column(db.String(255))
     company_name = db.Column(db.String(500))

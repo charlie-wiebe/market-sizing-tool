@@ -131,6 +131,7 @@ class HubSpotCacheSync:
                 }],
                 "properties": [
                     "domain",
+                    "hs_additional_domains",
                     "hs_linkedin_handle", 
                     "vertical",
                     "name",
@@ -164,7 +165,7 @@ class HubSpotCacheSync:
         while True:
             params = {
                 "limit": 100,
-                "properties": "domain,hs_linkedin_handle,vertical,name,createdate,hs_object_id",
+                "properties": "domain,hs_additional_domains,hs_linkedin_handle,vertical,name,createdate,hs_object_id",
                 "archived": "false"  # Only active companies
             }
             if after:
@@ -226,6 +227,7 @@ class HubSpotCacheSync:
             if existing:
                 # Update existing
                 existing.domain = properties.get("domain")
+                existing.hs_additional_domains = properties.get("hs_additional_domains")
                 existing.linkedin_handle = properties.get("hs_linkedin_handle")
                 existing.vertical = properties.get("vertical")
                 existing.company_name = properties.get("name")
@@ -236,6 +238,7 @@ class HubSpotCacheSync:
                 new_cache_entry = HubSpotCache(
                     hubspot_object_id=str(company["id"]),
                     domain=properties.get("domain"),
+                    hs_additional_domains=properties.get("hs_additional_domains"),
                     linkedin_handle=properties.get("hs_linkedin_handle"),
                     vertical=properties.get("vertical"),
                     company_name=properties.get("name"),
