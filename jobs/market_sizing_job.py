@@ -150,12 +150,17 @@ class MarketSizingJob:
                             
                             if companies_skipped % 50 == 0:
                                 logger.info(f"JOB {job.id}: Skipped {companies_skipped} existing companies so far")
-                            continue
+                            
+                            # Use existing company for person count processing
+                            company = existing_company
+                        else:
+                            # Save new company
+                            company = self._save_company(job.id, company_data)
+                    else:
+                        # Save new company
+                        company = self._save_company(job.id, company_data)
                     
-                    # Save new company
-                    company = self._save_company(job.id, company_data)
-                    
-                    # Process person counts if needed
+                    # Process person counts if needed (for both new and existing companies)
                     if job.person_filters:
                         person_credits = self._process_person_counts(job, company)
                         credits_used += person_credits
