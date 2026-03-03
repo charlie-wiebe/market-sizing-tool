@@ -66,8 +66,8 @@ def import_hubspot_csv(csv_path):
                 column_mapping['hubspot_object_id'] = col
             elif 'domain' in col_lower and 'company' in col_lower:
                 column_mapping['domain'] = col
-            elif 'linkedin' in col_lower and 'page' in col_lower:
-                column_mapping['linkedin_url'] = col
+            elif 'linkedin' in col_lower and 'handle' in col_lower:
+                column_mapping['linkedin_handle'] = col
             elif col_lower == 'vertical':
                 column_mapping['vertical'] = col
             elif 'name' in col_lower and 'company' not in col_lower:
@@ -92,13 +92,8 @@ def import_hubspot_csv(csv_path):
         clean_df['company_name'] = df[column_mapping.get('company_name', '')] if 'company_name' in column_mapping else None
         clean_df['vertical'] = df[column_mapping.get('vertical', '')] if 'vertical' in column_mapping else None
         
-        # Extract LinkedIn handle from URL
-        if 'linkedin_url' in column_mapping:
-            clean_df['linkedin_handle'] = df[column_mapping['linkedin_url']].apply(
-                lambda x: extract_linkedin_handle(x) if pd.notna(x) else None
-            )
-        else:
-            clean_df['linkedin_handle'] = None
+        # Use LinkedIn handle directly from CSV
+        clean_df['linkedin_handle'] = df[column_mapping.get('linkedin_handle', '')] if 'linkedin_handle' in column_mapping else None
         
         # Parse dates
         if 'hubspot_created_date' in column_mapping:
