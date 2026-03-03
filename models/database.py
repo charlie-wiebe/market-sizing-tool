@@ -243,6 +243,20 @@ class HubSpotEnrichment(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class HubSpotCache(db.Model):
+    __tablename__ = 'hubspot_company_cache'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    hubspot_object_id = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    domain = db.Column(db.String(255), index=True)
+    linkedin_handle = db.Column(db.String(255), index=True)
+    vertical = db.Column(db.String(255))
+    company_name = db.Column(db.String(500))
+    hubspot_created_date = db.Column(db.DateTime)
+    last_synced = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class CompanyJobReference(db.Model):
     __tablename__ = 'company_job_references'
     
