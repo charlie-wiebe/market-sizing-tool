@@ -576,6 +576,29 @@ class MarketSizingJob:
         try:
             logger.info(f"Starting HubSpot enrichment for job {job.id}")
             
+            # First, normalize domains for companies missing domain but having website
+            logger.info(f"Checking for companies missing domain field...")
+            from services.domain_utils import registrable_root_domain
+            
+            companies_missing_domain = Company.query.filter_by(job_id=job.id)\
+                .filter(Company.domain.is_(None))\
+                .filter(Company.website.isnot(None))\
+                .all()
+            
+            if companies_missing_domain:
+                logger.info(f"Found {len(companies_missing_domain)} companies missing domain, normalizing from website field...")
+                for company in companies_missing_domain:
+                    try:
+                        normalized_domain = registrable_root_domain(company.website)
+                        if normalized_domain:
+                            company.domain = normalized_domain
+                            logger.debug(f"Set domain for {company.name}: {normalized_domain} (from {company.website})")
+                    except Exception as e:
+                        logger.warning(f"Failed to normalize domain for company {company.id} ({company.name}): {e}")
+                
+                db.session.commit()
+                logger.info(f"Domain normalization complete.")
+            
             # Lazy load HubSpot client to prevent initialization errors from blocking job execution
             if self.hubspot_client is None:
                 try:
@@ -586,36 +609,53 @@ class MarketSizingJob:
                     logger.info(f"HubSpot enrichment skipped for job {job.id} - client initialization failed")
                     return
             
-            # Get all companies for this job that need enrichment
-            all_companies = Company.query.filter_by(job_id=job.id).all()
-            if not all_companies:
+            # Get total company count first
+            total_company_count = Company.query.filter_by(job_id=job.id).count()
+            if total_company_count == 0:
                 logger.info(f"No companies to enrich with HubSpot for job {job.id}")
                 return
             
-            # Filter companies based on deduplication settings
+            logger.info(f"Found {total_company_count} total companies for job {job.id}")
+            
+            # Process companies in chunks to avoid memory issues
             companies_to_enrich = []
             hubspot_skipped = 0
+            chunk_size = 500
             
-            for company in all_companies:
-                if job.skip_existing_hubspot:
-                    existing_enrichment = self._find_existing_hubspot_enrichment(company, job.max_data_age_days)
-                    if existing_enrichment:
-                        logger.debug(f"Skipping HubSpot enrichment for {company.name}: existing data found")
-                        
-                        # Create reference to existing enrichment for this job
-                        hubspot_ref = HubSpotEnrichment(
-                            company_id=company.id,
-                            job_id=job.id,
-                            hubspot_object_id=existing_enrichment.hubspot_object_id,
-                            vertical=existing_enrichment.vertical,
-                            lookup_method=existing_enrichment.lookup_method,
-                            hubspot_created_date=existing_enrichment.hubspot_created_date
-                        )
-                        db.session.add(hubspot_ref)
-                        hubspot_skipped += 1
-                        continue
+            for offset in range(0, total_company_count, chunk_size):
+                # Load chunk of companies from database
+                logger.info(f"Loading companies {offset+1}-{min(offset+chunk_size, total_company_count)} of {total_company_count}")
                 
-                companies_to_enrich.append(company)
+                try:
+                    company_chunk = Company.query.filter_by(job_id=job.id)\
+                        .limit(chunk_size)\
+                        .offset(offset)\
+                        .all()
+                except Exception as e:
+                    logger.error(f"Failed to load companies from database: {e}")
+                    raise
+                
+                # Process each company in the chunk
+                for company in company_chunk:
+                    if job.skip_existing_hubspot:
+                        existing_enrichment = self._find_existing_hubspot_enrichment(company, job.max_data_age_days)
+                        if existing_enrichment:
+                            logger.debug(f"Skipping HubSpot enrichment for {company.name}: existing data found")
+                            
+                            # Create reference to existing enrichment for this job
+                            hubspot_ref = HubSpotEnrichment(
+                                company_id=company.id,
+                                job_id=job.id,
+                                hubspot_object_id=existing_enrichment.hubspot_object_id,
+                                vertical=existing_enrichment.vertical,
+                                lookup_method=existing_enrichment.lookup_method,
+                                hubspot_created_date=existing_enrichment.hubspot_created_date
+                            )
+                            db.session.add(hubspot_ref)
+                            hubspot_skipped += 1
+                            continue
+                
+                    companies_to_enrich.append(company)
             
             # Update job tracking
             if hubspot_skipped > 0:
