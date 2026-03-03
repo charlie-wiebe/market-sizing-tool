@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from models.database import Company, HubSpotCache
 from services.linkedin_utils import extract_linkedin_handle
-from services.domain_utils import normalize_domain
+from services.domain_utils import registrable_root_domain
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from config import get_database_url
@@ -37,7 +37,7 @@ def main():
         
         # Extract handle and normalize domain
         linkedin_handle = extract_linkedin_handle(company.linkedin_url)
-        normalized_domain = normalize_domain(company.domain)
+        normalized_domain = registrable_root_domain(company.domain)
         
         print(f"   → Extracted LinkedIn handle: {linkedin_handle}")
         print(f"   → Normalized domain: {normalized_domain}")
