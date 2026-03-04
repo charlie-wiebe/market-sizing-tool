@@ -61,11 +61,20 @@ def get_search_domains_priority_order(company_record):
     
     # Priority 3: other_websites (often redirects/invalid - last resort)
     other_websites = getattr(company_record, 'other_websites', None)
-    if other_websites and isinstance(other_websites, (list, tuple)):
-        for site in other_websites:
-            if site:
-                root_domain = registrable_root_domain(site)
-                if root_domain and root_domain not in domains_to_try:
-                    domains_to_try.append(root_domain)
+    if other_websites:
+        # Handle JSON string format from database
+        if isinstance(other_websites, str):
+            try:
+                import json
+                other_websites = json.loads(other_websites)
+            except (json.JSONDecodeError, TypeError):
+                other_websites = None
+        
+        if other_websites and isinstance(other_websites, (list, tuple)):
+            for site in other_websites:
+                if site:
+                    root_domain = registrable_root_domain(site)
+                    if root_domain and root_domain not in domains_to_try:
+                        domains_to_try.append(root_domain)
                     
     return domains_to_try
