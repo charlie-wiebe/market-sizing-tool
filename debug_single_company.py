@@ -97,25 +97,20 @@ def debug_person_search(domains_to_try, filters, company, logger):
         domain_source = "website" if i == 0 else "domain" if i == 1 else "other_websites"
         logger.info(f"Trying domain {i+1}/{len(domains_to_try)}: {domain_root} (from {domain_source})")
         
-        # Prepare payload
-        payload = {
-            "page": 1,
-            "filters": {
-                **filters,
-                "company": {
-                    "websites": {
-                        "include": [domain_root],
-                        "exclude": []
-                    }
-                }
-            }
-        }
+        # Prepare search filters (match production code structure)
+        search_filters = dict(filters)
+        if "company" not in search_filters:
+            search_filters["company"] = {}
+        if "websites" not in search_filters["company"]:
+            search_filters["company"]["websites"] = {"include": [], "exclude": []}
         
-        logger.info(f"  Payload: {payload}")
+        search_filters["company"]["websites"]["include"] = [domain_root]
         
-        # Make API call
+        logger.info(f"  Search filters: {search_filters}")
+        
+        # Make API call (match production code format)
         try:
-            response = client.search_people(payload)
+            response = client.search_people(search_filters, page=1)
             
             if client.is_error(response):
                 error_code = client.get_error_code(response)
