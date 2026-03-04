@@ -47,20 +47,20 @@ def get_search_domains_priority_order(company_record):
     domains_to_try = []
     
     # Priority 1: website domain (empirically most accurate - 100% success rate)
-    website = getattr(company_record, 'website', None) or company_record.get('website') if hasattr(company_record, 'get') else None
+    website = getattr(company_record, 'website', None)
     if website:
         website_domain = registrable_root_domain(website)
         if website_domain:
             domains_to_try.append(website_domain)
     
     # Priority 2: domain field (parent/canonical - broader fallback)
-    domain = getattr(company_record, 'domain', None) or company_record.get('domain') if hasattr(company_record, 'get') else None
+    domain = getattr(company_record, 'domain', None)
     if domain:
         if domain not in domains_to_try:
             domains_to_try.append(domain)
     
     # Priority 3: other_websites (often redirects/invalid - last resort)
-    other_websites = getattr(company_record, 'other_websites', None) or company_record.get('other_websites') if hasattr(company_record, 'get') else None
+    other_websites = getattr(company_record, 'other_websites', None)
     if other_websites and isinstance(other_websites, (list, tuple)):
         for site in other_websites:
             if site:
