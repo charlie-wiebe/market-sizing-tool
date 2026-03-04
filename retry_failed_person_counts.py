@@ -173,12 +173,9 @@ def retry_person_count(session, client, person_count_record, dry_run=False):
             total_count=result.get("total_count", 0),
             status=result.get("status", "ok"),
             error_code=result.get("error_code"),
+            domain_searched=successful_domain,  # Record successful domain
             is_active=True
         )
-        
-        if successful_domain:
-            # Could add successful_domain to a new field if needed
-            pass
             
         session.add(new_person_count)
         session.commit()

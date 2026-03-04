@@ -519,6 +519,7 @@ class MarketSizingJob:
             total_count=result.get("total_count", 0),
             status=result.get("status", "ok"),
             error_code=result.get("error_code"),
+            domain_searched=result.get("successful_domain"),  # Record successful domain
             prospeo_company_id=company.prospeo_company_id,
             is_active=True  # New record is active by default
         )
