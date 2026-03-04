@@ -18,6 +18,7 @@ from sqlalchemy.orm import sessionmaker
 # Add project directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from app import app  # Import Flask app for context
 from models.database import Company, PersonCount, db
 from services.prospeo_client import ProspeoClient
 from services.domain_utils import get_search_domains_priority_order
@@ -223,70 +224,72 @@ def main():
     logger.info(f"Max age: {args.max_age_days} days")
     logger.info(f"Dry run: {args.dry_run}")
     
-    # Connect to database
-    database_url = get_database_url()
-    engine = create_engine(database_url)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    
-    # Initialize Prospeo client
-    client = ProspeoClient()
-    
-    try:
-        # Find failed person count records
-        failed_records = get_failed_person_counts(session, args.job_id, args.max_age_days)
-        logger.info(f"📊 Found {len(failed_records)} failed person count records")
+    # Initialize Flask application context for database operations
+    with app.app_context():
+        # Connect to database
+        database_url = get_database_url()
+        engine = create_engine(database_url)
+        Session = sessionmaker(bind=engine)
+        session = Session()
         
-        if len(failed_records) == 0:
-            logger.info("✅ No failed records to retry!")
-            return
+        # Initialize Prospeo client
+        client = ProspeoClient()
         
-        # Limit to max_retries
-        records_to_process = failed_records[:args.max_retries]
-        if len(records_to_process) < len(failed_records):
-            logger.info(f"📝 Processing first {len(records_to_process)} records (limited by --max-retries)")
-        
-        success_count = 0
-        failed_count = 0
-        
-        for i, record in enumerate(records_to_process, 1):
-            logger.info(f"\n--- Processing record {i}/{len(records_to_process)} ---")
+        try:
+            # Find failed person count records
+            failed_records = get_failed_person_counts(session, args.job_id, args.max_age_days)
+            logger.info(f"📊 Found {len(failed_records)} failed person count records")
             
-            try:
-                if retry_person_count(session, client, record, args.dry_run):
-                    success_count += 1
-                else:
+            if len(failed_records) == 0:
+                logger.info("✅ No failed records to retry!")
+                return
+            
+            # Limit to max_retries
+            records_to_process = failed_records[:args.max_retries]
+            if len(records_to_process) < len(failed_records):
+                logger.info(f"📝 Processing first {len(records_to_process)} records (limited by --max-retries)")
+            
+            success_count = 0
+            failed_count = 0
+            
+            for i, record in enumerate(records_to_process, 1):
+                logger.info(f"\n--- Processing record {i}/{len(records_to_process)} ---")
+                
+                try:
+                    if retry_person_count(session, client, record, args.dry_run):
+                        success_count += 1
+                    else:
+                        failed_count += 1
+                        
+                except Exception as e:
+                    logger.error(f"Error processing record {record.id}: {str(e)}")
                     failed_count += 1
                     
-            except Exception as e:
-                logger.error(f"Error processing record {record.id}: {str(e)}")
-                failed_count += 1
-                
-            # Rate limiting - respect Prospeo limits
-            if i < len(records_to_process):  # Don't sleep after last record
-                time.sleep(0.1)  # Small delay between requests
+                # Rate limiting - respect Prospeo limits
+                if i < len(records_to_process):  # Don't sleep after last record
+                    time.sleep(0.1)  # Small delay between requests
+            
+            # Summary
+            logger.info(f"\n🎯 Retry Summary:")
+            logger.info(f"   Total records processed: {len(records_to_process)}")
+            logger.info(f"   Successful retries: {success_count}")
+            logger.info(f"   Failed retries: {failed_count}")
+            
+            if args.dry_run:
+                logger.info("ℹ️  This was a dry run - no database changes were made")
         
-        # Summary
-        logger.info(f"\n🎯 Retry Summary:")
-        logger.info(f"   Total records processed: {len(records_to_process)}")
-        logger.info(f"   Successful retries: {success_count}")
-        logger.info(f"   Failed retries: {failed_count}")
-        
-        if args.dry_run:
-            logger.info("ℹ️  This was a dry run - no database changes were made")
-        
-        # Show Prospeo API usage stats
-        stats = client.get_tracking_stats()
-        logger.info(f"💰 API Usage: {stats['total_requests']} requests, {stats['total_rate_limit_delay']:.1f}s rate limit delay")
-        
-    except KeyboardInterrupt:
-        logger.info("\n⚠️  Script interrupted by user")
-    except Exception as e:
-        logger.error(f"❌ Script failed: {str(e)}")
-        raise
-    finally:
-        session.close()
-        logger.info("🏁 Script completed")
+            # Show Prospeo API usage stats
+            stats = client.get_tracking_stats()
+            logger.info(f"💰 API Usage: {stats['total_requests']} requests, {stats['total_rate_limit_delay']:.1f}s rate limit delay")
+            
+        except KeyboardInterrupt:
+            logger.info("\n⚠️  Script interrupted by user")
+        except Exception as e:
+            logger.error(f"❌ Script failed: {str(e)}")
+            raise
+        finally:
+            session.close()
+            logger.info("🏁 Script completed")
 
 if __name__ == "__main__":
     main()
