@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 def get_failed_person_counts(session, job_id=None, max_age_days=30):
     """
     Query database for person_counts that need retry:
+    - ONLY 'SDR Count' query names
     - status != 'ok' OR total_count = 0
     - is_active = true
     """
@@ -45,6 +46,7 @@ def get_failed_person_counts(session, job_id=None, max_age_days=30):
     query = session.query(PersonCount).filter(
         PersonCount.is_active == True,
         PersonCount.created_at >= max_age,
+        PersonCount.query_name == 'SDR Count',
         or_(
             PersonCount.status != 'ok',
             PersonCount.total_count == 0,
@@ -59,31 +61,28 @@ def get_failed_person_counts(session, job_id=None, max_age_days=30):
 
 def prepare_person_search_filters(query_name):
     """
-    Prepare standard person search filters based on query name.
-    This matches the filters typically used in the main application.
+    Prepare person search filters for SDR Count queries.
+    Uses the exact filters specified by the user.
     """
-    # Standard SDR search filters
-    base_filters = {
-        "person_department": {
-            "include": ["Sales Development"],
-            "exclude": []
-        },
-        "person_seniority": {
-            "include": ["Entry", "Senior"],
-            "exclude": []
-        },
-        "person_time_in_current_role": {
-            "min": 1,
-            "max": 60
-        },
-        "person_location_search": {
-            "include": ["United States #US"],
-            "exclude": []
+    # SDR Count filters as specified
+    if query_name == "SDR Count":
+        return {
+            "person_department": {
+                "include": ["Sales Development"],
+                "exclude": []
+            },
+            "person_seniority": {
+                "include": ["Entry", "Senior"],
+                "exclude": []
+            },
+            "person_location_search": {
+                "include": ["United States", "Canada", "United Kingdom", "Australia"],
+                "exclude": ["India"]
+            }
         }
-    }
-    
-    # Could be extended based on query_name if needed
-    return base_filters
+    else:
+        # This should not happen since we only process SDR Count records
+        raise ValueError(f"Unsupported query_name: {query_name}")
 
 def execute_person_search_with_domain(client, filters, domain_root, company_name, query_name):
     """Execute person search with given domain"""
@@ -174,7 +173,6 @@ def retry_person_count(session, client, person_count_record, dry_run=False):
             total_count=result.get("total_count", 0),
             status=result.get("status", "ok"),
             error_code=result.get("error_code"),
-            prospeo_company_id=company.prospeo_company_id,
             is_active=True
         )
         
