@@ -123,38 +123,60 @@ def retry_person_count(session, client, person_count_record, dry_run=False):
     logger.info(f"Retrying person count for {company.name} - {person_count_record.query_name}")
     logger.info(f"Previous result: count={person_count_record.total_count}, status={person_count_record.status}, error={person_count_record.error_code}")
     
-    # Get domains to try in evidence-based priority order
-    domains_to_try = get_search_domains_priority_order(company)
-    
-    if not domains_to_try:
-        logger.warning(f"No domains available for {company.name}")
-        return False
-    
     # Prepare search filters
     filters = prepare_person_search_filters(person_count_record.query_name)
     
-    # Try domains in evidence-based priority order (website → domain → other_websites)
+    # Check if we already know which domain works for this company
     result = None
     successful_domain = None
     
-    for i, domain_root in enumerate(domains_to_try):
-        if not domain_root:
-            continue
-            
-        domain_source = "website" if i == 0 else "domain" if i == 1 else "other_websites"
-        logger.info(f"Trying {domain_source} for {company.name}: {domain_root}")
-        
+    if company.successful_domain:
+        # Use the known successful domain
+        logger.info(f"Using known successful domain for {company.name}: {company.successful_domain}")
         result = execute_person_search_with_domain(
-            client, filters, domain_root, company.name, person_count_record.query_name
+            client, filters, company.successful_domain, company.name, person_count_record.query_name
         )
         
-        # If we got results, we're done
         if result and result.get("total_count", 0) > 0:
-            successful_domain = domain_root
-            logger.info(f"✅ Success with {domain_source} for {company.name}: {result['total_count']} people (domain: {domain_root})")
-            break
+            successful_domain = company.successful_domain
+            logger.info(f"Person search succeeded with known domain for {company.name}: {result['total_count']}")
         else:
-            logger.info(f"❌ No results with {domain_source} for {company.name} (domain: {domain_root})")
+            logger.warning(f"Known successful domain {company.successful_domain} failed for {company.name}, falling back to waterfall")
+            # Clear the failed domain and fall back to waterfall
+            company.successful_domain = None
+    
+    # If no known successful domain or it failed, run the waterfall
+    if not successful_domain:
+        domains_to_try = get_search_domains_priority_order(company)
+        
+        if not domains_to_try:
+            logger.warning(f"No domains available for {company.name}")
+            return False
+        
+        # Try domains in evidence-based priority order (website → domain → other_websites)
+        for i, domain_root in enumerate(domains_to_try):
+            if not domain_root:
+                continue
+                
+            domain_source = "website" if i == 0 else "domain" if i == 1 else "other_websites"
+            logger.info(f"Trying {domain_source} for {company.name}: {domain_root}")
+            
+            result = execute_person_search_with_domain(
+                client, filters, domain_root, company.name, person_count_record.query_name
+            )
+            
+            # If we got results, we're done
+            if result and result.get("total_count", 0) > 0:
+                successful_domain = domain_root
+                logger.info(f"✅ Success with {domain_source} for {company.name}: {result['total_count']} people (domain: {domain_root})")
+                
+                # Save successful domain to company for future use
+                if not company.successful_domain:
+                    company.successful_domain = domain_root
+                    logger.info(f"Saved successful domain {domain_root} to company {company.name}")
+                break
+            else:
+                logger.info(f"❌ No results with {domain_source} for {company.name} (domain: {domain_root})")
     
     if not result:
         logger.warning(f"All domain attempts failed for {company.name}")
@@ -173,9 +195,9 @@ def retry_person_count(session, client, person_count_record, dry_run=False):
             total_count=result.get("total_count", 0),
             status=result.get("status", "ok"),
             error_code=result.get("error_code"),
-            domain_searched=successful_domain,  # Record successful domain
             is_active=True
         )
+        
             
         session.add(new_person_count)
         session.commit()

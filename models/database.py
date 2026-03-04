@@ -145,6 +145,9 @@ class Company(db.Model):
     naics_codes = db.Column(db.JSON)
     linkedin_id = db.Column(db.String(100))
     
+    # Person search optimization
+    successful_domain = db.Column(db.String(255), nullable=True)  # Domain that successfully found person results
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     person_counts = db.relationship('PersonCount', backref='company', lazy='dynamic')
@@ -212,7 +215,6 @@ class PersonCount(db.Model):
     total_count = db.Column(db.Integer, default=0)
     status = db.Column(db.String(20), default='ok')  # ok, error
     error_code = db.Column(db.String(50))  # INVALID_FILTERS, NO_RESULTS, etc.
-    domain_searched = db.Column(db.String(255), nullable=True)  # Domain that successfully found results
     is_active = db.Column(db.Boolean, default=True, index=True)  # Active record tracking
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -226,7 +228,6 @@ class PersonCount(db.Model):
             'total_count': self.total_count,
             'status': self.status,
             'error_code': self.error_code,
-            'domain_searched': self.domain_searched,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 

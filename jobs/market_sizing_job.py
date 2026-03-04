@@ -406,31 +406,51 @@ class MarketSizingJob:
             # Prepare filters with location resolution
             filters = self._prepare_person_search_filters(job, person_config)
             
-            # Get domains to try in evidence-based priority order
-            from services.domain_utils import get_search_domains_priority_order
-            domains_to_try = get_search_domains_priority_order(company)
-            
+            # Check if we already know which domain works for this company
             result = None
             successful_domain = None
             
-            # Try domains in evidence-based priority order (website → domain → other_websites)
-            for i, domain_root in enumerate(domains_to_try):
-                if not domain_root:
-                    continue
-                    
-                domain_source = "website" if i == 0 else "domain" if i == 1 else "other_websites"
-                logger.debug(f"Trying person search for {company.name} - {query_name} with {domain_source}: {domain_root}")
-                
-                result = self._execute_person_search(filters, domain_root, company, query_name)
+            if company.successful_domain:
+                # Use the known successful domain
+                logger.debug(f"Using known successful domain for {company.name}: {company.successful_domain}")
+                result = self._execute_person_search(filters, company.successful_domain, company, query_name)
                 credits_used += 1
                 
-                # If we got results, we're done
                 if result and result.get("total_count", 0) > 0:
-                    successful_domain = domain_root
-                    logger.debug(f"Person search succeeded with {domain_source} for {company.name}: {result['total_count']} (domain: {domain_root})")
-                    break
+                    successful_domain = company.successful_domain
+                    logger.debug(f"Person search succeeded with known domain for {company.name}: {result['total_count']}")
                 else:
-                    logger.debug(f"Person search with {domain_source} for {company.name} returned 0 results (domain: {domain_root})")
+                    logger.warning(f"Known successful domain {company.successful_domain} failed for {company.name}, falling back to waterfall")
+                    # Clear the failed domain and fall back to waterfall
+                    company.successful_domain = None
+            
+            # If no known successful domain or it failed, run the waterfall
+            if not successful_domain:
+                from services.domain_utils import get_search_domains_priority_order
+                domains_to_try = get_search_domains_priority_order(company)
+                
+                # Try domains in evidence-based priority order (website → domain → other_websites)
+                for i, domain_root in enumerate(domains_to_try):
+                    if not domain_root:
+                        continue
+                        
+                    domain_source = "website" if i == 0 else "domain" if i == 1 else "other_websites"
+                    logger.debug(f"Trying person search for {company.name} - {query_name} with {domain_source}: {domain_root}")
+                    
+                    result = self._execute_person_search(filters, domain_root, company, query_name)
+                    credits_used += 1
+                    
+                    # If we got results, we're done
+                    if result and result.get("total_count", 0) > 0:
+                        successful_domain = domain_root
+                        logger.debug(f"Person search succeeded with {domain_source} for {company.name}: {result['total_count']} (domain: {domain_root})")
+                        
+                        # Save successful domain to company for future use
+                        company.successful_domain = domain_root
+                        logger.debug(f"Saved successful domain {domain_root} to company {company.name}")
+                        break
+                    else:
+                        logger.debug(f"Person search with {domain_source} for {company.name} returned 0 results (domain: {domain_root})")
             
             # Save the result (success or final attempt)
             if result:
@@ -519,7 +539,6 @@ class MarketSizingJob:
             total_count=result.get("total_count", 0),
             status=result.get("status", "ok"),
             error_code=result.get("error_code"),
-            domain_searched=result.get("successful_domain"),  # Record successful domain
             prospeo_company_id=company.prospeo_company_id,
             is_active=True  # New record is active by default
         )
