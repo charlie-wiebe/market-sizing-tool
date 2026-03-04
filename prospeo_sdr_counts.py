@@ -123,36 +123,8 @@ def extract_companies(resp):
     return companies
 
 
-def get_search_domains_priority_order(company):
-    """
-    Get domains to try for person search in evidence-based priority order.
-    Same logic as services/domain_utils.py for consistency.
-    """
-    domains_to_try = []
-    
-    # Priority 1: website domain (empirically most accurate - 100% success rate)
-    website = company.get("website")
-    if website:
-        website_domain = registrable_root_domain(website)
-        if website_domain:
-            domains_to_try.append(website_domain)
-    
-    # Priority 2: domain field (parent/canonical - broader fallback)  
-    domain = company.get("domain")
-    if domain:
-        if domain not in domains_to_try:
-            domains_to_try.append(domain)
-    
-    # Priority 3: other_websites (often redirects/invalid - last resort)
-    other_websites = company.get("other_websites")
-    if other_websites and isinstance(other_websites, (list, tuple)):
-        for site in other_websites:
-            if site:
-                root_domain = registrable_root_domain(site)
-                if root_domain and root_domain not in domains_to_try:
-                    domains_to_try.append(root_domain)
-                    
-    return domains_to_try
+# Import centralized domain extraction function
+from services.domain_utils import get_search_domains_priority_order
 
 def search_people_for_company(root_domain):
     payload = {
