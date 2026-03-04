@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import sys
 import time
 import json
 from urllib.parse import urlparse
@@ -122,6 +123,37 @@ def extract_companies(resp):
     return companies
 
 
+def get_search_domains_priority_order(company):
+    """
+    Get domains to try for person search in evidence-based priority order.
+    Same logic as services/domain_utils.py for consistency.
+    """
+    domains_to_try = []
+    
+    # Priority 1: website domain (empirically most accurate - 100% success rate)
+    website = company.get("website")
+    if website:
+        website_domain = registrable_root_domain(website)
+        if website_domain:
+            domains_to_try.append(website_domain)
+    
+    # Priority 2: domain field (parent/canonical - broader fallback)  
+    domain = company.get("domain")
+    if domain:
+        if domain not in domains_to_try:
+            domains_to_try.append(domain)
+    
+    # Priority 3: other_websites (often redirects/invalid - last resort)
+    other_websites = company.get("other_websites")
+    if other_websites and isinstance(other_websites, (list, tuple)):
+        for site in other_websites:
+            if site:
+                root_domain = registrable_root_domain(site)
+                if root_domain and root_domain not in domains_to_try:
+                    domains_to_try.append(root_domain)
+                    
+    return domains_to_try
+
 def search_people_for_company(root_domain):
     payload = {
         "page": 1,
@@ -187,11 +219,11 @@ def main():
         name = c.get("name") or "not found"
         company_id = c.get("company_id") or "not found"
         website = c.get("website") or "not found"
-        domain = c.get("domain") or website
 
-        root = registrable_root_domain(domain)
+        # Get domains to try in evidence-based priority order
+        domains_to_try = get_search_domains_priority_order(c)
 
-        if not root:
+        if not domains_to_try:
             output.append({
                 "company": name,
                 "company_id": company_id,
@@ -202,13 +234,29 @@ def main():
             })
             continue
 
-        count, status = search_people_for_company(root)
+        # Try domains in evidence-based priority order (website → domain → other_websites)
+        count = "not found"
+        status = "error"
+        successful_domain = None
+
+        for i, domain_root in enumerate(domains_to_try):
+            domain_source = "website" if i == 0 else "domain" if i == 1 else "other_websites"
+            print(f"Trying {domain_source} for {name}: {domain_root}", file=sys.stderr)
+            
+            count, status = search_people_for_company(domain_root)
+            
+            if status == "ok" and isinstance(count, int) and count > 0:
+                successful_domain = domain_root
+                print(f"Success with {domain_source} for {name}: {count}", file=sys.stderr)
+                break
+            else:
+                print(f"No results with {domain_source} for {name}: {count}", file=sys.stderr)
 
         output.append({
             "company": name,
             "company_id": company_id,
             "website": website,
-            "root_domain_used": root,
+            "root_domain_used": successful_domain or domains_to_try[0] if domains_to_try else "not found",
             "sales_dev_count_entry_or_senior": count,
             "status": status
         })
