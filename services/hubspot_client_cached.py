@@ -72,11 +72,12 @@ class HubSpotClientCached:
         matches = self.session.query(HubSpotCache).filter(
             or_(
                 HubSpotCache.domain == domain,
-                # Check if domain appears in semicolon-separated list
-                HubSpotCache.hs_additional_domains.like(f'%;{domain};%'),  # Middle
-                HubSpotCache.hs_additional_domains.like(f'{domain};%'),     # Start
-                HubSpotCache.hs_additional_domains.like(f'%;{domain}'),     # End
-                HubSpotCache.hs_additional_domains == domain                # Only value
+                # Check if domain appears in semicolon+space-separated list
+                # Format: "domain1; domain2; domain3"
+                HubSpotCache.hs_additional_domains.like(f'%; {domain}; %'),  # Middle
+                HubSpotCache.hs_additional_domains.like(f'{domain}; %'),     # Start
+                HubSpotCache.hs_additional_domains.like(f'%; {domain}'),     # End  
+                HubSpotCache.hs_additional_domains == domain                 # Only value
             )
         ).all()
         
