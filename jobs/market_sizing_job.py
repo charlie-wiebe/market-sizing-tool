@@ -4,7 +4,7 @@ from models.database import db, Job, Company, PersonCount, HubSpotEnrichment, Co
 from services.prospeo_client import ProspeoClient
 from services.domain_utils import registrable_root_domain
 from services.query_segmenter import QuerySegmenter
-from services.hubspot_client import HubSpotClient
+from services.hubspot_client_cached import HubSpotClientCached
 from sqlalchemy import and_, or_
 
 class MarketSizingJob:
@@ -620,7 +620,7 @@ class MarketSizingJob:
             if self.hubspot_client is None:
                 try:
                     logger.info("Initializing HubSpot client")
-                    self.hubspot_client = HubSpotClient()
+                    self.hubspot_client = HubSpotClientCached(session=db.session)
                 except Exception as e:
                     logger.error(f"Failed to initialize HubSpot client: {e}")
                     logger.info(f"HubSpot enrichment skipped for job {job.id} - client initialization failed")
