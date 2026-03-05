@@ -20,10 +20,25 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('market-sizing')
 db.init_app(app)
 
-# Basic database initialization - migrations removed to prevent startup crashes
+# Basic database initialization with safe migrations
 try:
     with app.app_context():
         db.create_all()
+        
+        # Safe migrations - add new SDR fields to HubSpot cache
+        from sqlalchemy import text
+        with db.engine.connect() as conn:
+            try:
+                # Add SDR count columns to HubSpot cache table
+                conn.execute(text("ALTER TABLE hubspot_company_cache ADD COLUMN IF NOT EXISTS AIP_SDRs INTEGER"))
+                conn.execute(text("ALTER TABLE hubspot_company_cache ADD COLUMN IF NOT EXISTS override_SDRs INTEGER"))
+                conn.execute(text("ALTER TABLE hubspot_company_cache ADD COLUMN IF NOT EXISTS mixrank_SDRs INTEGER"))
+                conn.execute(text("ALTER TABLE hubspot_company_cache ADD COLUMN IF NOT EXISTS keyplay_SDRs INTEGER"))
+                conn.execute(text("ALTER TABLE hubspot_company_cache ADD COLUMN IF NOT EXISTS clay_SDRs INTEGER"))
+                conn.execute(text("ALTER TABLE hubspot_company_cache ADD COLUMN IF NOT EXISTS final_SDRs INTEGER"))
+                conn.commit()
+            except Exception as e:
+                print(f"Migration note: {e}")
 except Exception as e:
     print(f"Database initialization error: {e}")
 

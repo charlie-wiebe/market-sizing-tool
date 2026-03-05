@@ -259,6 +259,14 @@ class HubSpotCache(db.Model):
     hubspot_created_date = db.Column(db.DateTime)
     last_synced = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # SDR count fields (all integers)
+    AIP_SDRs = db.Column(db.Integer)
+    override_SDRs = db.Column(db.Integer)
+    mixrank_SDRs = db.Column(db.Integer)
+    keyplay_SDRs = db.Column(db.Integer)
+    clay_SDRs = db.Column(db.Integer)
+    final_SDRs = db.Column(db.Integer)
 
 
 class SyncMetadata(db.Model):

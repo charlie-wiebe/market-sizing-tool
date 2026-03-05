@@ -136,7 +136,13 @@ class HubSpotCacheSync:
                     "vertical",
                     "name",
                     "createdate",
-                    "hs_object_id"
+                    "hs_object_id",
+                    "aip___of_sdrs",
+                    "manual_override_____sdrs",
+                    "mixrank_____sdrs",
+                    "keyplay___sdrs_bdrs",
+                    "clay_estimated___sdrs",
+                    "estimated___sdrs"
                 ],
                 "limit": 100,
                 "after": after
@@ -165,7 +171,7 @@ class HubSpotCacheSync:
         while True:
             params = {
                 "limit": 100,
-                "properties": "domain,hs_additional_domains,hs_linkedin_handle,vertical,name,createdate,hs_object_id",
+                "properties": "domain,hs_additional_domains,hs_linkedin_handle,vertical,name,createdate,hs_object_id,aip___of_sdrs,manual_override_____sdrs,mixrank_____sdrs,keyplay___sdrs_bdrs,clay_estimated___sdrs,estimated___sdrs",
                 "archived": "false"  # Only active companies
             }
             if after:
@@ -224,6 +230,15 @@ class HubSpotCacheSync:
                 hubspot_object_id=str(company["id"])
             ).first()
             
+            # Helper function to parse integer safely
+            def parse_int(value):
+                if value is None or value == "":
+                    return None
+                try:
+                    return int(float(str(value)))
+                except (ValueError, TypeError):
+                    return None
+            
             if existing:
                 # Update existing
                 existing.domain = properties.get("domain")
@@ -232,6 +247,13 @@ class HubSpotCacheSync:
                 existing.vertical = properties.get("vertical")
                 existing.company_name = properties.get("name")
                 existing.hubspot_created_date = created_date
+                # Update SDR count fields
+                existing.AIP_SDRs = parse_int(properties.get("aip___of_sdrs"))
+                existing.override_SDRs = parse_int(properties.get("manual_override_____sdrs"))
+                existing.mixrank_SDRs = parse_int(properties.get("mixrank_____sdrs"))
+                existing.keyplay_SDRs = parse_int(properties.get("keyplay___sdrs_bdrs"))
+                existing.clay_SDRs = parse_int(properties.get("clay_estimated___sdrs"))
+                existing.final_SDRs = parse_int(properties.get("estimated___sdrs"))
                 existing.last_synced = datetime.utcnow()
             else:
                 # Create new
@@ -243,6 +265,13 @@ class HubSpotCacheSync:
                     vertical=properties.get("vertical"),
                     company_name=properties.get("name"),
                     hubspot_created_date=created_date,
+                    # Add SDR count fields
+                    AIP_SDRs=parse_int(properties.get("aip___of_sdrs")),
+                    override_SDRs=parse_int(properties.get("manual_override_____sdrs")),
+                    mixrank_SDRs=parse_int(properties.get("mixrank_____sdrs")),
+                    keyplay_SDRs=parse_int(properties.get("keyplay___sdrs_bdrs")),
+                    clay_SDRs=parse_int(properties.get("clay_estimated___sdrs")),
+                    final_SDRs=parse_int(properties.get("estimated___sdrs")),
                     last_synced=datetime.utcnow()
                 )
                 self.session.add(new_cache_entry)
