@@ -867,7 +867,7 @@ def refresh_hubspot_enrichments():
                     HubSpotEnrichment.is_active == True
                 )
             )
-        ).limit(100).all()  # Start with first 100 companies
+        ).limit(5000).all()  # Process 5000 companies per batch for faster backfill
         
         if not companies_needing_enrichment:
             return jsonify({
