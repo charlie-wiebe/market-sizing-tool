@@ -691,6 +691,73 @@ def results_page(job_id):
     job = Job.query.get_or_404(job_id)
     return render_template("results.html", job=job)
 
+@app.route('/api/admin/backfill-prospeo-ids', methods=['POST'])
+def backfill_prospeo_company_ids():
+    """ADMIN ENDPOINT: Backfill NULL prospeo_company_id values in person_counts"""
+    try:
+        # Check records that need backfilling
+        check_query = text("""
+            SELECT 
+                COUNT(*) as records_to_backfill,
+                COUNT(CASE WHEN c.prospeo_company_id IS NOT NULL THEN 1 END) as companies_have_prospeo_id
+            FROM person_counts pc
+            JOIN companies c ON pc.company_id = c.id
+            WHERE pc.prospeo_company_id IS NULL 
+                AND pc.is_active = true
+        """)
+        
+        with db.engine.connect() as conn:
+            result = conn.execute(check_query).fetchone()
+            records_to_backfill = result.records_to_backfill
+            companies_have_prospeo_id = result.companies_have_prospeo_id
+            
+            if records_to_backfill == 0:
+                return jsonify({
+                    'success': True,
+                    'message': 'No records need backfilling',
+                    'records_updated': 0
+                })
+            
+            # Execute backfill UPDATE
+            backfill_query = text("""
+                UPDATE person_counts 
+                SET prospeo_company_id = c.prospeo_company_id
+                FROM companies c
+                WHERE person_counts.company_id = c.id
+                    AND person_counts.prospeo_company_id IS NULL
+                    AND person_counts.is_active = true
+                    AND c.prospeo_company_id IS NOT NULL
+            """)
+            
+            result = conn.execute(backfill_query)
+            records_updated = result.rowcount
+            conn.commit()
+            
+            # Verify the fix
+            verify_query = text("""
+                SELECT COUNT(*) as remaining_null_records
+                FROM person_counts 
+                WHERE prospeo_company_id IS NULL 
+                    AND is_active = true
+            """)
+            
+            result = conn.execute(verify_query).fetchone()
+            remaining_null = result.remaining_null_records
+            
+            return jsonify({
+                'success': True,
+                'message': 'Backfill completed successfully',
+                'records_found': records_to_backfill,
+                'records_updated': records_updated,
+                'remaining_null': remaining_null
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
