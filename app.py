@@ -20,55 +20,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('market-sizing')
 db.init_app(app)
 
+# Basic database initialization - migrations removed to prevent startup crashes
 try:
     with app.app_context():
         db.create_all()
-        
-        # Run migrations
-        from sqlalchemy import text
-        with db.engine.connect() as conn:
-            try:
-                conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS query_fingerprint VARCHAR(32)"))
-                conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'quick_tam'"))
-                conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS aggregate_results JSON"))
-                
-                # Deduplication tracking columns
-                conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS companies_skipped INTEGER DEFAULT 0"))
-                conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS person_counts_skipped INTEGER DEFAULT 0"))
-                conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS hubspot_skipped INTEGER DEFAULT 0"))
-                
-                # Deduplication settings columns
-                conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS skip_existing_companies BOOLEAN DEFAULT true"))
-                conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS skip_existing_person_counts BOOLEAN DEFAULT true"))
-                conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS skip_existing_hubspot BOOLEAN DEFAULT true"))
-                conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS max_data_age_days INTEGER DEFAULT 30"))
-                for col in ['sample_titles', 'sample_names', 'query_filters']:
-                    conn.execute(text(f"ALTER TABLE person_counts DROP COLUMN IF EXISTS {col}"))
-                
-                # Idempotent column fixes (safe to run every deploy)
-                conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS employee_count INTEGER"))
-                conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS founded INTEGER"))
-                conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_b2b BOOLEAN"))
-                conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS revenue_range_printed VARCHAR(50)"))
-                
-                # Active record tracking columns (added in prospeo-location-normalization)
-                conn.execute(text("ALTER TABLE person_counts ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE"))
-                conn.execute(text("ALTER TABLE hubspot_enrichments ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE"))
-                
-                # Set existing NULL records to active (safe default for new columns)
-                conn.execute(text("UPDATE person_counts SET is_active = TRUE WHERE is_active IS NULL"))
-                conn.execute(text("UPDATE hubspot_enrichments SET is_active = TRUE WHERE is_active IS NULL"))
-                
-                # Create indexes for performance
-                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_person_counts_is_active ON person_counts(is_active)"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_hubspot_enrichments_is_active ON hubspot_enrichments(is_active)"))
-                
-                conn.commit()
-            except Exception as e:
-                print(f"Migration note: {e}")
 except Exception as e:
-    print(f"App initialization error: {e}")
-    # Continue anyway to allow app to start
+    print(f"Database initialization error: {e}")
 
 client = ProspeoClient()
 segmenter = QuerySegmenter(client)
