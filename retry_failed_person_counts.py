@@ -41,10 +41,13 @@ def get_failed_person_counts(session, job_id=None, max_age_days=30):
     - ONLY 'SDR Count' query names
     - status != 'ok' OR total_count = 0
     - is_active = true
-    - ONLY companies with different domains to try (website != domain OR other_websites exists)
+    - ONLY companies with multiple normalized domains to try
     """
+    from services.domain_utils import registrable_root_domain, get_search_domains_priority_order
+    
     max_age = datetime.utcnow() - timedelta(days=max_age_days)
     
+    # Get all failed records first
     query = session.query(PersonCount).join(Company).filter(
         PersonCount.is_active == True,
         PersonCount.created_at >= max_age,
@@ -53,18 +56,25 @@ def get_failed_person_counts(session, job_id=None, max_age_days=30):
             PersonCount.status != 'ok',
             PersonCount.total_count == 0,
             PersonCount.total_count.is_(None)
-        ),
-        # Only retry companies that have alternative domains to try
-        or_(
-            Company.website != Company.domain,  # Website and domain fields differ
-            Company.other_websites.isnot(None)  # Has other_websites to try
         )
     )
     
     if job_id:
         query = query.filter(PersonCount.job_id == job_id)
     
-    return query.all()
+    # Filter in Python to only companies with multiple normalized domains
+    all_failed = query.all()
+    filtered_records = []
+    
+    for record in all_failed:
+        company = record.company
+        domains_to_try = get_search_domains_priority_order(company)
+        
+        # Only retry if there are multiple unique normalized domains to attempt
+        if len(domains_to_try) > 1:
+            filtered_records.append(record)
+    
+    return filtered_records
 
 def prepare_person_search_filters(query_name):
     """
