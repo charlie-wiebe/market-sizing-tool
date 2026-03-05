@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """
-One-time comprehensive HubSpot enrichment refresh.
-Ensures every company in the database has been enriched using the cache.
+Comprehensive HubSpot enrichment refresh with job filtering.
+
+Usage:
+    python3 refresh_all_hubspot_enrichment.py                    # Process all jobs
+    python3 refresh_all_hubspot_enrichment.py --job-ids 1,2,3    # Process specific jobs
+    python3 refresh_all_hubspot_enrichment.py --since-job 10     # Process jobs with ID >= 10
 """
 import os
 import sys
 import logging
+import argparse
 from datetime import datetime
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
@@ -25,7 +30,29 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def main():
-    """Run comprehensive HubSpot enrichment for all companies."""
+    """Run comprehensive HubSpot enrichment for filtered companies."""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description='Refresh HubSpot enrichments with job filtering options'
+    )
+    parser.add_argument(
+        '--job-ids',
+        type=str,
+        help='Comma-separated list of specific job IDs to process (e.g., 1,2,3)'
+    )
+    parser.add_argument(
+        '--since-job',
+        type=int,
+        help='Process jobs with ID greater than or equal to this number'
+    )
+    
+    args = parser.parse_args()
+    
+    # Validate arguments
+    if args.job_ids and args.since_job:
+        logger.error("Cannot specify both --job-ids and --since-job")
+        sys.exit(1)
+    
     start_time = datetime.utcnow()
     
     # Get database URL from environment
@@ -49,10 +76,32 @@ def main():
         logger.info("Initializing cached HubSpot client...")
         hubspot_client = HubSpotClientCached(session=session)
         
-        # Get all jobs with companies
-        # Note: Can't use distinct() with JSON columns, but ordering by id prevents duplicates
-        jobs_with_companies = session.query(Job.id).join(Company).group_by(Job.id).order_by(Job.id).all()
+        # Get jobs based on filtering arguments
+        jobs_query = session.query(Job.id).join(Company).group_by(Job.id).order_by(Job.id)
+        
+        if args.job_ids:
+            # Parse specific job IDs
+            try:
+                specific_job_ids = [int(x.strip()) for x in args.job_ids.split(',')]
+                jobs_query = jobs_query.filter(Job.id.in_(specific_job_ids))
+                logger.info(f"Filtering to specific job IDs: {specific_job_ids}")
+            except ValueError as e:
+                logger.error(f"Invalid job IDs format: {args.job_ids}")
+                sys.exit(1)
+        elif args.since_job:
+            # Filter jobs since specific ID
+            jobs_query = jobs_query.filter(Job.id >= args.since_job)
+            logger.info(f"Filtering to jobs with ID >= {args.since_job}")
+        else:
+            logger.info("Processing all jobs with companies")
+            
+        jobs_with_companies = jobs_query.all()
         job_ids = [j[0] for j in jobs_with_companies]
+        
+        if not job_ids:
+            logger.error("No jobs found matching the specified criteria")
+            return
+            
         jobs = session.query(Job).filter(Job.id.in_(job_ids)).order_by(Job.id).all()
         logger.info(f"Found {len(jobs)} jobs with companies to process")
         
@@ -195,10 +244,8 @@ def main():
         logger.error(f"Script failed with error: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        session.rollback()
     finally:
         session.close()
-        logger.info("Database connection closed.")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
