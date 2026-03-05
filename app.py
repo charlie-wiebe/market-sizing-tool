@@ -759,6 +759,89 @@ def backfill_prospeo_company_ids():
             'error': str(e)
         }), 500
 
+@app.route('/api/admin/fix-hubspot-duplicates', methods=['POST'])
+def fix_hubspot_duplicate_enrichments():
+    """ADMIN ENDPOINT: Fix duplicate active HubSpot enrichments - keep most recent per company"""
+    try:
+        # Check companies with duplicate active enrichments
+        check_query = text("""
+            SELECT 
+                COUNT(*) as companies_with_duplicates,
+                SUM(active_count) - COUNT(*) as records_to_deactivate
+            FROM (
+                SELECT 
+                    company_id,
+                    COUNT(*) as active_count
+                FROM hubspot_enrichments 
+                WHERE is_active = true
+                GROUP BY company_id
+                HAVING COUNT(*) > 1
+            ) duplicates
+        """)
+        
+        with db.engine.connect() as conn:
+            result = conn.execute(check_query).fetchone()
+            companies_with_duplicates = result.companies_with_duplicates
+            records_to_deactivate = result.records_to_deactivate
+            
+            if companies_with_duplicates == 0:
+                return jsonify({
+                    'success': True,
+                    'message': 'No duplicate active HubSpot enrichments found',
+                    'companies_fixed': 0,
+                    'records_deactivated': 0
+                })
+            
+            # Fix duplicates: keep most recent active enrichment per company, deactivate older ones
+            fix_query = text("""
+                UPDATE hubspot_enrichments 
+                SET is_active = false 
+                WHERE id IN (
+                    SELECT id 
+                    FROM (
+                        SELECT 
+                            id,
+                            ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY created_at DESC) as rn
+                        FROM hubspot_enrichments 
+                        WHERE is_active = true
+                    ) ranked
+                    WHERE rn > 1
+                )
+            """)
+            
+            result = conn.execute(fix_query)
+            records_deactivated = result.rowcount
+            conn.commit()
+            
+            # Verify the fix
+            verify_query = text("""
+                SELECT COUNT(*) as remaining_duplicates
+                FROM (
+                    SELECT company_id
+                    FROM hubspot_enrichments 
+                    WHERE is_active = true
+                    GROUP BY company_id
+                    HAVING COUNT(*) > 1
+                ) remaining
+            """)
+            
+            result = conn.execute(verify_query).fetchone()
+            remaining_duplicates = result.remaining_duplicates
+            
+            return jsonify({
+                'success': True,
+                'message': 'HubSpot duplicate enrichments fixed successfully',
+                'companies_with_duplicates': companies_with_duplicates,
+                'records_deactivated': records_deactivated,
+                'remaining_duplicates': remaining_duplicates
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

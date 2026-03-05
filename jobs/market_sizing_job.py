@@ -719,10 +719,14 @@ class MarketSizingJob:
                 for company_id, enrichment_data in enrichments.items():
                     if enrichment_data:
                         # Set previous HubSpot enrichments for this company to inactive
-                        HubSpotEnrichment.query.filter(
+                        # Use explicit session and flush to ensure deactivation happens before new record
+                        deactivate_count = HubSpotEnrichment.query.filter(
                             HubSpotEnrichment.company_id == company_id,
                             HubSpotEnrichment.is_active == True
                         ).update({"is_active": False})
+                        
+                        # Flush the deactivation to ensure it's applied before creating new record
+                        db.session.flush()
                         
                         # Create new active enrichment record
                         hubspot_enrichment = HubSpotEnrichment(
@@ -736,6 +740,10 @@ class MarketSizingJob:
                         )
                         db.session.add(hubspot_enrichment)
                         total_enriched += 1
+                        
+                        # Log if we deactivated existing records for debugging
+                        if deactivate_count > 0:
+                            logger.debug(f"Deactivated {deactivate_count} existing HubSpot enrichments for company {company_id}")
                 
                 # Commit batch results
                 db.session.commit()
