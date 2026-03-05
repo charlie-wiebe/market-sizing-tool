@@ -110,7 +110,9 @@ def main():
                         batch_data.append({
                             'id': company.id,
                             'linkedin_url': company.linkedin_url,
-                            'domain': company.domain
+                            'domain': company.domain,
+                            'website': company.website,
+                            'other_websites': company.other_websites
                         })
                 
                 if batch_data:
