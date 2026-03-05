@@ -281,6 +281,82 @@ class HubSpotCacheSync:
         self.session.commit()
         return count
     
+    def reconcile_hubspot_ids(self):
+        """Reconcile HubSpot IDs for companies that may have been merged.
+        
+        When companies are merged in HubSpot, they get new IDs but our cache
+        still has the old ones. This method batch-checks all cached IDs.
+        """
+        logger.info("Starting HubSpot ID reconciliation for merged companies...")
+        
+        # Get all HubSpot IDs currently in cache
+        cache_records = self.session.query(HubSpotCache).all()
+        if not cache_records:
+            logger.info("No records in cache to reconcile")
+            return 0
+            
+        updated_count = 0
+        total_records = len(cache_records)
+        logger.info(f"Reconciling {total_records} cached HubSpot IDs...")
+        
+        # Process in batches of 100 (HubSpot batch read limit)
+        for i in range(0, len(cache_records), 100):
+            batch = cache_records[i:i + 100]
+            batch_ids = [record.hubspot_object_id for record in batch]
+            
+            logger.info(f"Reconciling batch {i//100 + 1}: {len(batch)} records")
+            
+            # Use batch read to get current HubSpot data
+            url = f"{self.base_url}/crm/v3/objects/companies/batch/read"
+            payload = {
+                "inputs": [{"id": str(obj_id)} for obj_id in batch_ids],
+                "properties": ["hs_object_id"]  # Only need the current ID
+            }
+            
+            try:
+                self._rate_limit_wait()
+                response = requests.post(url, headers=self.headers, json=payload, timeout=30)
+                response.raise_for_status()
+                batch_response = response.json()
+                
+                if 'results' not in batch_response:
+                    logger.warning(f"Invalid response for ID reconciliation batch")
+                    continue
+                    
+                # Create lookup map of old ID -> new ID
+                id_updates = {}
+                for result in batch_response['results']:
+                    current_id = result['id']
+                    stored_id = result.get('properties', {}).get('hs_object_id')
+                    if stored_id and stored_id != current_id:
+                        id_updates[current_id] = stored_id
+                        
+                # Update cache records that have ID mismatches
+                for record in batch:
+                    new_id = id_updates.get(record.hubspot_object_id)
+                    if new_id:
+                        logger.info(f"Updating HubSpot ID: {record.hubspot_object_id} -> {new_id}")
+                        record.hubspot_object_id = new_id
+                        updated_count += 1
+                        
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Failed to reconcile ID batch: {e}")
+                continue
+                
+        # Commit all ID updates
+        if updated_count > 0:
+            try:
+                self.session.commit()
+                logger.info(f"✅ ID reconciliation complete: {updated_count} HubSpot IDs updated")
+            except Exception as e:
+                logger.error(f"Failed to commit ID updates: {e}")
+                self.session.rollback()
+                updated_count = 0
+        else:
+            logger.info("✅ ID reconciliation complete: No ID updates needed")
+            
+        return updated_count
+    
     def sync(self):
         """Main sync process."""
         last_sync = self.get_last_sync_timestamp()
@@ -307,7 +383,13 @@ class HubSpotCacheSync:
                 else:
                     logger.info("No archived companies found")
             
-            # Step 2: Get new companies
+            # Step 2: Reconcile HubSpot IDs for merged companies
+            logger.info("Reconciling HubSpot IDs for merged companies...")
+            reconciled_count = self.reconcile_hubspot_ids()
+            if reconciled_count > 0:
+                logger.info(f"Reconciled {reconciled_count} HubSpot IDs from merged companies")
+            
+            # Step 3: Get new companies
             if last_sync:
                 logger.info("Getting new companies created since last sync...")
                 new_companies = self.get_companies_created_after(last_sync)
