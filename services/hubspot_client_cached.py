@@ -158,17 +158,41 @@ class HubSpotClientCached:
         for company in companies:
             company_id = company['id']
             linkedin_handle = extract_linkedin_handle(company.get('linkedin_url'))
-            domain = normalize_domain(company.get('domain'))
             
             # Search cache by LinkedIn handle
             linkedin_results = self.search_company_by_linkedin_handle(linkedin_handle)
             
-            # Search cache by domain
-            domain_results = self.search_company_by_domain(domain)
+            # Search cache by domain waterfall (website -> domain -> other_websites)
+            domain_results = []
+            domains_to_try = []
+            
+            # Build domain waterfall priority order
+            if company.get('website'):
+                domains_to_try.append(normalize_domain(company.get('website')))
+            if company.get('domain'):
+                domains_to_try.append(normalize_domain(company.get('domain')))
+            if company.get('other_websites'):
+                try:
+                    import json
+                    other_sites = json.loads(company.get('other_websites')) if isinstance(company.get('other_websites'), str) else company.get('other_websites')
+                    if isinstance(other_sites, list):
+                        for site in other_sites:
+                            if site:
+                                domains_to_try.append(normalize_domain(site))
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            
+            # Try each domain in waterfall order until we find matches
+            for domain in domains_to_try:
+                if domain:
+                    results = self.search_company_by_domain(domain)
+                    if results:
+                        domain_results = results
+                        break  # Use first domain that has results
             
             # Resolve best match
             best_match = self.resolve_duplicates(linkedin_results, domain_results,
-                                               linkedin_handle, domain)
+                                               linkedin_handle, domains_to_try[0] if domains_to_try else None)
             
             if best_match:
                 properties = best_match.get('properties', {})
