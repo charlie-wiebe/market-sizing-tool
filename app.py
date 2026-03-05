@@ -8,6 +8,7 @@ import io
 
 from config import Config
 from models.database import db, Job, Company, PersonCount, HubSpotEnrichment, CompanyJobReference, generate_query_fingerprint
+from sqlalchemy import text
 from services.prospeo_client import ProspeoClient
 from services.query_segmenter import QuerySegmenter
 from services.domain_utils import registrable_root_domain
