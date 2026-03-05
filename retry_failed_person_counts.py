@@ -41,10 +41,11 @@ def get_failed_person_counts(session, job_id=None, max_age_days=30):
     - ONLY 'SDR Count' query names
     - status != 'ok' OR total_count = 0
     - is_active = true
+    - ONLY companies with different domains to try (website != domain OR other_websites exists)
     """
     max_age = datetime.utcnow() - timedelta(days=max_age_days)
     
-    query = session.query(PersonCount).filter(
+    query = session.query(PersonCount).join(Company).filter(
         PersonCount.is_active == True,
         PersonCount.created_at >= max_age,
         PersonCount.query_name == 'SDR Count',
@@ -52,6 +53,11 @@ def get_failed_person_counts(session, job_id=None, max_age_days=30):
             PersonCount.status != 'ok',
             PersonCount.total_count == 0,
             PersonCount.total_count.is_(None)
+        ),
+        # Only retry companies that have alternative domains to try
+        or_(
+            Company.website != Company.domain,  # Website and domain fields differ
+            Company.other_websites.isnot(None)  # Has other_websites to try
         )
     )
     
