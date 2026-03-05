@@ -10,8 +10,8 @@ import os
 import logging
 import argparse
 import time
-from datetime import datetime
-from sqlalchemy import create_engine
+from datetime import datetime, UTC
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import requests
 
@@ -125,7 +125,7 @@ class SDRBackfiller:
         cache_record.keyplay_sdrs = self.parse_int(properties.get("keyplay___sdrs_bdrs"))
         cache_record.clay_sdrs = self.parse_int(properties.get("clay_estimated___sdrs"))
         cache_record.final_sdrs = self.parse_int(properties.get("estimated___sdrs"))
-        cache_record.last_synced = datetime.utcnow()
+        cache_record.last_synced = datetime.now(UTC)
         
         return True
     
@@ -192,7 +192,7 @@ class SDRBackfiller:
             
             # Progress update
             batch_stats = self.session.execute(
-                "SELECT COUNT(*) as total, MAX(id) as max_id FROM hubspot_company_cache WHERE last_synced IS NOT NULL"
+                text("SELECT COUNT(*) as total, MAX(id) as max_id FROM hubspot_company_cache WHERE last_synced IS NOT NULL")
             ).fetchone()
             
             if batch_stats:
