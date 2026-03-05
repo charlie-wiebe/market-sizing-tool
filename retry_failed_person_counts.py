@@ -212,6 +212,7 @@ def retry_person_count(session, client, person_count_record, dry_run=False):
             total_count=result.get("total_count", 0),
             status=result.get("status", "ok"),
             error_code=result.get("error_code"),
+            prospeo_company_id=company.prospeo_company_id,  # FIX: Missing field causing NULL values
             is_active=True
         )
         
