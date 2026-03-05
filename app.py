@@ -1,7 +1,7 @@
 import os
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from flask import Flask, render_template, request, jsonify, Response
 import csv
 import io
@@ -279,7 +279,7 @@ def preview():
             aggregate_person_counts[query_name] = 0
     
     # Calculate potential credit savings from deduplication
-    max_age = datetime.utcnow() - timedelta(days=30)  # Default to 30 days
+    max_age = datetime.now(UTC) - timedelta(days=30)  # Default to 30 days
     existing_companies_count = Company.query.filter(
         Company.created_at >= max_age,
         Company.prospeo_company_id.isnot(None)
@@ -337,7 +337,7 @@ def create_job():
     max_data_age_days = data.get("max_data_age_days", 30)
     
     job = Job(
-        name=data.get("name", f"Job {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"),
+        name=data.get("name", f"Job {datetime.now(UTC).strftime('%Y-%m-%d %H:%M')}"),
         status="pending",
         company_filters=company_filters,
         person_filters=person_filters,
@@ -366,7 +366,7 @@ def create_job():
 def run_quick_tam_job(job):
     """Run Quick TAM job synchronously - just aggregate counts."""
     job.status = 'running'
-    job.started_at = datetime.utcnow()
+    job.started_at = datetime.now(UTC)
     db.session.commit()
     
     try:
@@ -379,7 +379,7 @@ def run_quick_tam_job(job):
         if client.is_error(response):
             job.status = 'failed'
             job.error_message = f"Company search failed: {client.get_error_code(response)}"
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(UTC)
             db.session.commit()
             return
         
@@ -428,12 +428,12 @@ def run_quick_tam_job(job):
         job.aggregate_results = aggregate_results
         job.actual_credits = credits_used
         job.status = 'completed'
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(UTC)
         
     except Exception as e:
         job.status = 'failed'
         job.error_message = str(e)
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(UTC)
     
     db.session.commit()
 
@@ -453,7 +453,7 @@ def stop_job(job_id):
         del running_jobs[job_id]
     
     job.status = "stopped"
-    job.completed_at = datetime.utcnow()
+    job.completed_at = datetime.now(UTC)
     db.session.commit()
     
     return jsonify(job.to_dict())

@@ -8,7 +8,7 @@ Usage: python sync_hubspot_cache.py
 import sys
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, UTC
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import requests
@@ -65,12 +65,12 @@ class HubSpotCacheSync:
             sync_record = SyncMetadata(sync_type='hubspot_cache')
             self.session.add(sync_record)
         
-        sync_record.last_sync_timestamp = datetime.utcnow()
+        sync_record.last_sync_timestamp = datetime.now(UTC)
         sync_record.last_sync_status = status
         sync_record.records_added = records_added
         sync_record.records_removed = records_removed
         sync_record.error_message = error_message
-        sync_record.updated_at = datetime.utcnow()
+        sync_record.updated_at = datetime.now(UTC)
         
         self.session.commit()
     
@@ -254,7 +254,7 @@ class HubSpotCacheSync:
                 existing.keyplay_sdrs = parse_int(properties.get("keyplay___sdrs_bdrs"))
                 existing.clay_sdrs = parse_int(properties.get("clay_estimated___sdrs"))
                 existing.final_sdrs = parse_int(properties.get("estimated___sdrs"))
-                existing.last_synced = datetime.utcnow()
+                existing.last_synced = datetime.now(UTC)
             else:
                 # Create new
                 new_cache_entry = HubSpotCache(
@@ -272,7 +272,7 @@ class HubSpotCacheSync:
                     keyplay_sdrs=parse_int(properties.get("keyplay___sdrs_bdrs")),
                     clay_sdrs=parse_int(properties.get("clay_estimated___sdrs")),
                     final_sdrs=parse_int(properties.get("estimated___sdrs")),
-                    last_synced=datetime.utcnow()
+                    last_synced=datetime.now(UTC)
                 )
                 self.session.add(new_cache_entry)
             
@@ -284,7 +284,7 @@ class HubSpotCacheSync:
     def sync(self):
         """Main sync process."""
         last_sync = self.get_last_sync_timestamp()
-        sync_start = datetime.utcnow()
+        sync_start = datetime.now(UTC)
         
         try:
             logger.info(f"Starting HubSpot cache sync...")
@@ -331,7 +331,7 @@ class HubSpotCacheSync:
             
             # Show final stats
             total_in_cache = self.session.query(HubSpotCache).count()
-            elapsed = (datetime.utcnow() - sync_start).total_seconds()
+            elapsed = (datetime.now(UTC) - sync_start).total_seconds()
             
             logger.info("✅ Sync completed successfully!")
             logger.info(f"  Time taken: {elapsed:.1f} seconds")

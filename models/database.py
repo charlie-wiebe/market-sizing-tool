@@ -1,6 +1,6 @@
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, UTC
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
@@ -32,7 +32,7 @@ class Job(db.Model):
     error_message = db.Column(db.Text)
     started_at = db.Column(db.DateTime)
     completed_at = db.Column(db.DateTime)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     
     # Deduplication tracking
     companies_skipped = db.Column(db.Integer, default=0)
@@ -148,7 +148,7 @@ class Company(db.Model):
     # Person search optimization
     successful_domain = db.Column(db.String(255), nullable=True)  # Domain that successfully found person results
     
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     
     person_counts = db.relationship('PersonCount', backref='company', lazy='dynamic')
     hubspot_enrichments = db.relationship('HubSpotEnrichment', backref='company', lazy='dynamic')
@@ -216,7 +216,7 @@ class PersonCount(db.Model):
     status = db.Column(db.String(20), default='ok')  # ok, error
     error_code = db.Column(db.String(50))  # INVALID_FILTERS, NO_RESULTS, etc.
     is_active = db.Column(db.Boolean, default=True, index=True)  # Active record tracking
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     
     def to_dict(self):
         return {
@@ -243,7 +243,7 @@ class HubSpotEnrichment(db.Model):
     lookup_method = db.Column(db.String(50))  # 'linkedin_handle', 'domain', or 'both_match'
     hubspot_created_date = db.Column(db.DateTime)  # For duplicate resolution
     is_active = db.Column(db.Boolean, default=True, index=True)  # Active record tracking
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
 
 
 class HubSpotCache(db.Model):
@@ -257,8 +257,8 @@ class HubSpotCache(db.Model):
     vertical = db.Column(db.String(255))
     company_name = db.Column(db.String(500))
     hubspot_created_date = db.Column(db.DateTime)
-    last_synced = db.Column(db.DateTime, default=datetime.utcnow)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_synced = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     
     # SDR count fields (all integers) - lowercase to match PostgreSQL
     aip_sdrs = db.Column(db.Integer)
@@ -279,8 +279,8 @@ class SyncMetadata(db.Model):
     records_added = db.Column(db.Integer, default=0)
     records_removed = db.Column(db.Integer, default=0)
     error_message = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 
 class CompanyJobReference(db.Model):
@@ -289,7 +289,7 @@ class CompanyJobReference(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
     job_id = db.Column(db.Integer, db.ForeignKey('jobs.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     
     # Unique constraint to prevent duplicate references
     __table_args__ = (db.UniqueConstraint('company_id', 'job_id', name='unique_company_job'),)
