@@ -85,21 +85,32 @@ class SDRBackfiller:
         
         return query.all()
     
-    def fetch_sdr_fields_for_company(self, hubspot_object_id):
-        """Fetch only SDR fields for a single company from HubSpot API."""
+    def fetch_sdr_fields_batch(self, hubspot_object_ids):
+        """Fetch SDR fields for multiple companies using HubSpot batch read endpoint.
+        
+        HubSpot batch read can handle up to 100 companies per request.
+        """
         self._rate_limit_wait()
         
-        url = f"{self.base_url}/crm/v3/objects/companies/{hubspot_object_id}"
-        params = {
-            "properties": "aip___of_sdrs,manual_override_____sdrs,mixrank_____sdrs,keyplay___sdrs_bdrs,clay_estimated___sdrs,estimated___sdrs"
+        url = f"{self.base_url}/crm/v3/objects/companies/batch/read"
+        payload = {
+            "inputs": [{"id": str(obj_id)} for obj_id in hubspot_object_ids],
+            "properties": [
+                "aip___of_sdrs",
+                "manual_override_____sdrs", 
+                "mixrank_____sdrs",
+                "keyplay___sdrs_bdrs",
+                "clay_estimated___sdrs",
+                "estimated___sdrs"
+            ]
         }
         
         try:
-            response = requests.get(url, headers=self.headers, params=params, timeout=30)
+            response = requests.post(url, headers=self.headers, json=payload, timeout=30)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            logger.error(f"API request failed for company {hubspot_object_id}: {e}")
+            logger.error(f"Batch API request failed for {len(hubspot_object_ids)} companies: {e}")
             return None
     
     def parse_int(self, value):
@@ -142,26 +153,45 @@ class SDRBackfiller:
         updated_count = 0
         error_count = 0
         
-        for company in companies:
-            try:
-                logger.info(f"Processing company ID {company.id} (HubSpot ID: {company.hubspot_object_id})")
+        # Batch fetch from HubSpot - up to 100 companies per API call
+        hubspot_ids = [company.hubspot_object_id for company in companies]
+        
+        try:
+            logger.info(f"Making batch API call for {len(hubspot_ids)} companies")
+            batch_response = self.fetch_sdr_fields_batch(hubspot_ids)
+            
+            if not batch_response or 'results' not in batch_response:
+                logger.error("Batch API call failed or returned invalid response")
+                error_count = len(companies)
+            else:
+                # Create lookup map of HubSpot ID to company data
+                hubspot_data_map = {}
+                for result in batch_response['results']:
+                    hubspot_data_map[result['id']] = result
                 
-                # Fetch SDR fields from HubSpot
-                hubspot_data = self.fetch_sdr_fields_for_company(company.hubspot_object_id)
-                
-                if hubspot_data:
-                    if self.update_sdr_fields(company, hubspot_data):
-                        updated_count += 1
-                    else:
+                # Update each company with batch results
+                for company in companies:
+                    try:
+                        logger.info(f"Processing company ID {company.id} (HubSpot ID: {company.hubspot_object_id})")
+                        
+                        hubspot_data = hubspot_data_map.get(company.hubspot_object_id)
+                        if hubspot_data:
+                            if self.update_sdr_fields(company, hubspot_data):
+                                updated_count += 1
+                            else:
+                                error_count += 1
+                                logger.warning(f"Failed to update company ID {company.id}")
+                        else:
+                            error_count += 1
+                            logger.warning(f"No data returned for company ID {company.id} from batch response")
+                        
+                    except Exception as e:
                         error_count += 1
-                        logger.warning(f"Failed to update company ID {company.id}")
-                else:
-                    error_count += 1
-                    logger.warning(f"Failed to fetch data for company ID {company.id}")
-                
-            except Exception as e:
-                error_count += 1
-                logger.error(f"Error processing company ID {company.id}: {e}")
+                        logger.error(f"Error processing company ID {company.id}: {e}")
+                        
+        except Exception as e:
+            logger.error(f"Batch processing failed: {e}")
+            error_count = len(companies)
         
         # Commit batch updates
         try:
