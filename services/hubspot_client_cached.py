@@ -47,12 +47,12 @@ class HubSpotClientCached:
                     'hs_linkedin_handle': match.linkedin_handle,
                     'vertical': match.vertical,
                     'createdate': int(match.hubspot_created_date.timestamp() * 1000) if match.hubspot_created_date else None,
-                    'aip___of_sdrs': match.AIP_SDRs,
-                    'manual_override_____sdrs': match.override_SDRs,
-                    'mixrank_____sdrs': match.mixrank_SDRs,
-                    'keyplay___sdrs_bdrs': match.keyplay_SDRs,
-                    'clay_estimated___sdrs': match.clay_SDRs,
-                    'estimated___sdrs': match.final_SDRs
+                    'aip___of_sdrs': match.aip_sdrs,
+                    'manual_override_____sdrs': match.override_sdrs,
+                    'mixrank_____sdrs': match.mixrank_sdrs,
+                    'keyplay___sdrs_bdrs': match.keyplay_sdrs,
+                    'clay_estimated___sdrs': match.clay_sdrs,
+                    'estimated___sdrs': match.final_sdrs
                 }
             })
         return results
@@ -91,12 +91,12 @@ class HubSpotClientCached:
                     'hs_linkedin_handle': match.linkedin_handle,
                     'vertical': match.vertical,
                     'createdate': int(match.hubspot_created_date.timestamp() * 1000) if match.hubspot_created_date else None,
-                    'aip___of_sdrs': match.AIP_SDRs,
-                    'manual_override_____sdrs': match.override_SDRs,
-                    'mixrank_____sdrs': match.mixrank_SDRs,
-                    'keyplay___sdrs_bdrs': match.keyplay_SDRs,
-                    'clay_estimated___sdrs': match.clay_SDRs,
-                    'estimated___sdrs': match.final_SDRs
+                    'aip___of_sdrs': match.aip_sdrs,
+                    'manual_override_____sdrs': match.override_sdrs,
+                    'mixrank_____sdrs': match.mixrank_sdrs,
+                    'keyplay___sdrs_bdrs': match.keyplay_sdrs,
+                    'clay_estimated___sdrs': match.clay_sdrs,
+                    'estimated___sdrs': match.final_sdrs
                 }
             })
         return results

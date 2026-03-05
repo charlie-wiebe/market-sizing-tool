@@ -119,12 +119,12 @@ class SDRBackfiller:
         properties = hubspot_data['properties']
         
         # Update only SDR fields
-        cache_record.AIP_SDRs = self.parse_int(properties.get("aip___of_sdrs"))
-        cache_record.override_SDRs = self.parse_int(properties.get("manual_override_____sdrs"))
-        cache_record.mixrank_SDRs = self.parse_int(properties.get("mixrank_____sdrs"))
-        cache_record.keyplay_SDRs = self.parse_int(properties.get("keyplay___sdrs_bdrs"))
-        cache_record.clay_SDRs = self.parse_int(properties.get("clay_estimated___sdrs"))
-        cache_record.final_SDRs = self.parse_int(properties.get("estimated___sdrs"))
+        cache_record.aip_sdrs = self.parse_int(properties.get("aip___of_sdrs"))
+        cache_record.override_sdrs = self.parse_int(properties.get("manual_override_____sdrs"))
+        cache_record.mixrank_sdrs = self.parse_int(properties.get("mixrank_____sdrs"))
+        cache_record.keyplay_sdrs = self.parse_int(properties.get("keyplay___sdrs_bdrs"))
+        cache_record.clay_sdrs = self.parse_int(properties.get("clay_estimated___sdrs"))
+        cache_record.final_sdrs = self.parse_int(properties.get("estimated___sdrs"))
         cache_record.last_synced = datetime.utcnow()
         
         return True

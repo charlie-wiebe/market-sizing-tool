@@ -248,12 +248,12 @@ class HubSpotCacheSync:
                 existing.company_name = properties.get("name")
                 existing.hubspot_created_date = created_date
                 # Update SDR count fields
-                existing.AIP_SDRs = parse_int(properties.get("aip___of_sdrs"))
-                existing.override_SDRs = parse_int(properties.get("manual_override_____sdrs"))
-                existing.mixrank_SDRs = parse_int(properties.get("mixrank_____sdrs"))
-                existing.keyplay_SDRs = parse_int(properties.get("keyplay___sdrs_bdrs"))
-                existing.clay_SDRs = parse_int(properties.get("clay_estimated___sdrs"))
-                existing.final_SDRs = parse_int(properties.get("estimated___sdrs"))
+                existing.aip_sdrs = parse_int(properties.get("aip___of_sdrs"))
+                existing.override_sdrs = parse_int(properties.get("manual_override_____sdrs"))
+                existing.mixrank_sdrs = parse_int(properties.get("mixrank_____sdrs"))
+                existing.keyplay_sdrs = parse_int(properties.get("keyplay___sdrs_bdrs"))
+                existing.clay_sdrs = parse_int(properties.get("clay_estimated___sdrs"))
+                existing.final_sdrs = parse_int(properties.get("estimated___sdrs"))
                 existing.last_synced = datetime.utcnow()
             else:
                 # Create new
@@ -266,12 +266,12 @@ class HubSpotCacheSync:
                     company_name=properties.get("name"),
                     hubspot_created_date=created_date,
                     # Add SDR count fields
-                    AIP_SDRs=parse_int(properties.get("aip___of_sdrs")),
-                    override_SDRs=parse_int(properties.get("manual_override_____sdrs")),
-                    mixrank_SDRs=parse_int(properties.get("mixrank_____sdrs")),
-                    keyplay_SDRs=parse_int(properties.get("keyplay___sdrs_bdrs")),
-                    clay_SDRs=parse_int(properties.get("clay_estimated___sdrs")),
-                    final_SDRs=parse_int(properties.get("estimated___sdrs")),
+                    aip_sdrs=parse_int(properties.get("aip___of_sdrs")),
+                    override_sdrs=parse_int(properties.get("manual_override_____sdrs")),
+                    mixrank_sdrs=parse_int(properties.get("mixrank_____sdrs")),
+                    keyplay_sdrs=parse_int(properties.get("keyplay___sdrs_bdrs")),
+                    clay_sdrs=parse_int(properties.get("clay_estimated___sdrs")),
+                    final_sdrs=parse_int(properties.get("estimated___sdrs")),
                     last_synced=datetime.utcnow()
                 )
                 self.session.add(new_cache_entry)
