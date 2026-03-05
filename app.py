@@ -842,6 +842,102 @@ def fix_hubspot_duplicate_enrichments():
             'error': str(e)
         }), 500
 
+@app.route('/api/admin/refresh-hubspot-enrichments', methods=['POST'])
+def refresh_hubspot_enrichments():
+    """ADMIN ENDPOINT: Backfill missing HubSpot enrichments from cache"""
+    try:
+        from services.hubspot_client_cached import HubSpotClientCached
+        from models.database import HubSpotCache, Company, HubSpotEnrichment, Job
+        
+        # Check cache status first
+        cache_count = HubSpotCache.query.count()
+        if cache_count == 0:
+            return jsonify({
+                'success': False,
+                'error': 'HubSpot cache is empty! Cannot refresh enrichments.'
+            }), 400
+        
+        # Initialize cached HubSpot client
+        hubspot_client = HubSpotClientCached(session=db.session)
+        
+        # Get companies that need enrichment (have no active HubSpot enrichment)
+        companies_needing_enrichment = db.session.query(Company).filter(
+            ~Company.id.in_(
+                db.session.query(HubSpotEnrichment.company_id).filter(
+                    HubSpotEnrichment.is_active == True
+                )
+            )
+        ).limit(100).all()  # Start with first 100 companies
+        
+        if not companies_needing_enrichment:
+            return jsonify({
+                'success': True,
+                'message': 'No companies need HubSpot enrichment - all are already enriched.',
+                'cache_count': cache_count,
+                'companies_checked': 0,
+                'new_enrichments': 0
+            })
+        
+        # Build batch data for enrichment
+        batch_data = []
+        for company in companies_needing_enrichment:
+            batch_data.append({
+                'id': company.id,
+                'linkedin_url': company.linkedin_url,
+                'domain': company.domain
+            })
+        
+        # Get enrichments from cache
+        enrichments = hubspot_client.batch_enrich_companies(batch_data)
+        
+        # Save enrichments
+        new_enrichments = 0
+        for company in companies_needing_enrichment:
+            company_id = company.id
+            enrichment_data = enrichments.get(company_id)
+            
+            if enrichment_data:
+                try:
+                    # Create new enrichment record
+                    new_enrichment = HubSpotEnrichment(
+                        company_id=company_id,
+                        job_id=company.job_id,
+                        hubspot_object_id=enrichment_data['hubspot_object_id'],
+                        vertical=enrichment_data['vertical'],
+                        lookup_method=enrichment_data['lookup_method'],
+                        hubspot_created_date=enrichment_data['hubspot_created_date'],
+                        is_active=True
+                    )
+                    db.session.add(new_enrichment)
+                    new_enrichments += 1
+                except Exception as e:
+                    print(f"Failed to save enrichment for company {company_id}: {e}")
+        
+        # Commit all changes
+        db.session.commit()
+        
+        # Get total counts for response
+        total_companies = Company.query.count()
+        total_enriched = HubSpotEnrichment.query.filter(HubSpotEnrichment.is_active == True).count()
+        
+        return jsonify({
+            'success': True,
+            'cache_count': cache_count,
+            'companies_checked': len(companies_needing_enrichment),
+            'new_enrichments': new_enrichments,
+            'total_companies': total_companies,
+            'total_enriched': total_enriched,
+            'coverage_percent': round((total_enriched / total_companies * 100), 2) if total_companies > 0 else 0,
+            'message': f'Added {new_enrichments} new HubSpot enrichments from cache'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
