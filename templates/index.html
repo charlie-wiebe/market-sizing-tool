@@ -1330,7 +1330,20 @@
             }
             
             // Add initial CSV person filter
-            addCsvPersonFilter('SDR Count');
+            setTimeout(() => {
+                console.log('Testing widget initialization manually...');
+                const testContainer = document.createElement('div');
+                document.body.appendChild(testContainer);
+                try {
+                    const testWidget = new IncludeExcludeSelect(testContainer, DEPARTMENTS, {tree: true});
+                    console.log('Test widget created successfully:', testWidget);
+                    testContainer.remove();
+                } catch (e) {
+                    console.error('Test widget creation failed:', e);
+                }
+                
+                addCsvPersonFilter('SDR Count');
+            }, 1000);
         });
     </script>
 </body>
