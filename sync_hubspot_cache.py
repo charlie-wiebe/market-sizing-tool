@@ -346,20 +346,37 @@ class HubSpotCacheSync:
                     logger.warning(f"Invalid response for ID reconciliation batch")
                     continue
                     
-                # Compare requested IDs vs returned IDs to detect merges
-                # When a company is merged, requesting old ID returns new ID
-                # HubSpot batch/read preserves order: batch[i] corresponds to results[i]
-                for idx, record in enumerate(batch):
-                    if idx < len(batch_response['results']):
-                        result = batch_response['results'][idx]
-                        requested_id = record.hubspot_object_id
-                        returned_id = result['id']
-                        
-                        if requested_id != returned_id:
-                            logger.info(f"Detected merged company: {requested_id} -> {returned_id}")
-                            logger.info(f"Updating HubSpot ID: {record.hubspot_object_id} -> {returned_id}")
-                            record.hubspot_object_id = returned_id
-                            updated_count += 1
+                # FIXED LOGIC: HubSpot batch/read does NOT preserve order!
+                # We need to create a mapping from requested IDs to returned IDs
+                # When a company is merged, the hs_object_id property shows the current ID
+                
+                # Create mapping from requested ID to current ID
+                id_mapping = {}
+                for result in batch_response['results']:
+                    current_id = result['id']  # The actual current ID in HubSpot
+                    hs_object_id = result.get('properties', {}).get('hs_object_id')
+                    
+                    # hs_object_id should match current_id for active records
+                    # If they differ, something is wrong with our understanding
+                    if hs_object_id and hs_object_id != current_id:
+                        logger.warning(f"Unexpected: hs_object_id ({hs_object_id}) != current_id ({current_id})")
+                
+                # The real way to detect merges: if we requested ID X but got no result for X,
+                # then X was likely merged. But HubSpot's batch read should return results
+                # for valid IDs, even if they were merged (returning the new merged record).
+                
+                # Actually, let's check what IDs we got back vs what we requested
+                returned_ids = {result['id'] for result in batch_response['results']}
+                requested_ids = {record.hubspot_object_id for record in batch}
+                
+                # If we requested IDs that aren't in the returned set, they might be merged/deleted
+                missing_ids = requested_ids - returned_ids
+                if missing_ids:
+                    logger.info(f"IDs not returned by batch read (possibly merged/deleted): {missing_ids}")
+                
+                # For now, let's not make any updates since we're not sure about the correct logic
+                # This needs more investigation with the actual HubSpot API behavior
+                logger.info("Skipping ID updates - logic needs verification with HubSpot API behavior")
                         
             except requests.exceptions.RequestException as e:
                 logger.error(f"Failed to reconcile ID batch: {e}")
@@ -405,11 +422,12 @@ class HubSpotCacheSync:
                 else:
                     logger.info("No archived companies found")
             
-            # Step 2: Reconcile HubSpot IDs for merged companies
-            logger.info("Reconciling HubSpot IDs for merged companies...")
-            reconciled_count = self.reconcile_hubspot_ids()
-            if reconciled_count > 0:
-                logger.info(f"Reconciled {reconciled_count} HubSpot IDs from merged companies")
+            # Step 2: Reconcile HubSpot IDs for merged companies - DISABLED DUE TO BUG
+            logger.info("SKIPPING HubSpot ID reconciliation - disabled due to database corruption bug")
+            reconciled_count = 0
+            # reconciled_count = self.reconcile_hubspot_ids()
+            # if reconciled_count > 0:
+            #     logger.info(f"Reconciled {reconciled_count} HubSpot IDs from merged companies")
             
             # Step 3: Get new companies
             if last_sync:
