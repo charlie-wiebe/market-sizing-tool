@@ -1149,26 +1149,23 @@
             container.appendChild(block);
             
             // Initialize widgets (same as regular person filters)
-            const deptWidget = new IncludeExcludeWidget(
+            const deptWidget = new IncludeExcludeSelect(
                 document.getElementById(`csv_person_dept_${idx}`),
                 DEPARTMENTS,
-                { placeholder: 'Select departments...', defaultInclude: ['Sales Development'] }
+                { tree: true, includeSelected: name === 'SDR Count' ? ['Sales Development'] : [] }
             );
             
-            const seniorityWidget = new IncludeExcludeWidget(
+            const seniorityWidget = new IncludeExcludeSelect(
                 document.getElementById(`csv_person_seniority_${idx}`),
                 SENIORITIES,
-                { placeholder: 'Select seniorities...', defaultInclude: ['Entry', 'Senior'] }
+                { tree: false, includeSelected: name === 'SDR Count' ? ['Entry', 'Senior'] : [] }
             );
             
-            const jobTitleWidget = new JobTitleWidget(
-                document.getElementById(`csv_person_job_title_${idx}`),
-                { placeholder: 'Enter job titles...' }
-            );
+            const jobTitleWidget = new JobTitleWidget(document.getElementById(`csv_person_job_title_${idx}`));
             
             const locationWidget = new LocationAutocomplete(
                 document.getElementById(`csv_person_location_${idx}`),
-                { includeValues: ['United States #US'] }
+                { includeValues: name === 'SDR Count' ? ['United States #US'] : [] }
             );
             
             csvPersonBlocks[idx] = {
@@ -1203,16 +1200,16 @@
             Object.values(csvPersonBlocks).forEach(block => {
                 const filters = {
                     person_department: {
-                        include: Array.from(block.dept.includeSet),
-                        exclude: Array.from(block.dept.excludeSet)
+                        include: Array.from(block.dept.includeSet || []),
+                        exclude: Array.from(block.dept.excludeSet || [])
                     },
                     person_seniority: {
-                        include: Array.from(block.seniority.includeSet),
-                        exclude: Array.from(block.seniority.excludeSet)
+                        include: Array.from(block.seniority.includeSet || []),
+                        exclude: Array.from(block.seniority.excludeSet || [])
                     },
                     person_location_search: {
-                        include: block.location.includeValues,
-                        exclude: block.location.excludeValues
+                        include: block.location.includeValues || [],
+                        exclude: block.location.excludeValues || []
                     }
                 };
                 
@@ -1221,8 +1218,8 @@
                     filters.person_job_title = { boolean_search: block.jobTitle.booleanExpr };
                 } else {
                     filters.person_job_title = {
-                        include: block.jobTitle.includeValues,
-                        exclude: block.jobTitle.excludeValues,
+                        include: block.jobTitle.includeValues || [],
+                        exclude: block.jobTitle.excludeValues || [],
                         match_only_exact_job_titles: block.jobTitle.matchExact
                     };
                 }
@@ -1290,8 +1287,13 @@
             });
         }
         
-        // Initialize with one person filter for CSV tab
-        addCsvPersonFilter('SDR Count');
+        // Initialize with one person filter for CSV tab after page load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Ensure lucide icons are created
+            lucide.createIcons();
+            // Add initial CSV person filter
+            addCsvPersonFilter('SDR Count');
+        });
     </script>
 </body>
 </html>
