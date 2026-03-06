@@ -1151,34 +1151,39 @@
                 return;
             }
             
-            // Initialize widgets immediately like regular person filters
-            const deptWidget = new IncludeExcludeSelect(
-                deptContainer,
-                DEPARTMENTS,
-                { tree: true, includeSelected: filterName === 'SDR Count' ? ['Sales Development'] : [] }
-            );
-            
-            const seniorityWidget = new IncludeExcludeSelect(
-                seniorityContainer,
-                SENIORITIES,
-                { tree: false, includeSelected: filterName === 'SDR Count' ? ['Entry', 'Senior'] : [] }
-            );
-            
-            const jobTitleWidget = new JobTitleWidget(jobTitleContainer);
-            
-            const locationWidget = new LocationAutocomplete(
-                locationContainer,
-                { includeValues: filterName === 'SDR Count' ? ['United States #US'] : [] }
-            );
-            
-            // Store widgets
-            csvPersonBlocks[idx] = {
-                name: filterName,
-                dept: deptWidget,
-                seniority: seniorityWidget,
-                jobTitle: jobTitleWidget,
-                location: locationWidget
-            };
+            try {
+                // Initialize widgets immediately like regular person filters
+                const deptWidget = new IncludeExcludeSelect(
+                    deptContainer,
+                    DEPARTMENTS,
+                    { tree: true, includeSelected: filterName === 'SDR Count' ? ['Sales Development'] : [] }
+                );
+                
+                const seniorityWidget = new IncludeExcludeSelect(
+                    seniorityContainer,
+                    SENIORITIES,
+                    { tree: false, includeSelected: filterName === 'SDR Count' ? ['Entry', 'Senior'] : [] }
+                );
+                
+                const jobTitleWidget = new JobTitleWidget(jobTitleContainer);
+                
+                const locationWidget = new LocationAutocomplete(
+                    locationContainer,
+                    { includeValues: filterName === 'SDR Count' ? ['United States #US'] : [] }
+                );
+                
+                // Store widgets
+                csvPersonBlocks[idx] = {
+                    name: filterName,
+                    dept: deptWidget,
+                    seniority: seniorityWidget,
+                    jobTitle: jobTitleWidget,
+                    location: locationWidget
+                };
+            } catch (error) {
+                console.error('Failed to initialize CSV person filter widgets:', error);
+                alert('Failed to initialize person filters. Please refresh the page and try again.');
+            }
             
             lucide.createIcons();
             
@@ -1288,7 +1293,7 @@
         }
         
         // Wait for all scripts and DOM to be ready
-        window.addEventListener('load', () => {
+        window.addEventListener('DOMContentLoaded', () => {
             // Initialize widgets after everything is loaded
             initCompanyWidgets();
             
@@ -1333,6 +1338,22 @@
             
             // Add initial CSV person filter with delay to ensure everything is loaded
             setTimeout(() => {
+                // Check if all required globals are loaded
+                if (typeof IncludeExcludeSelect === 'undefined' || 
+                    typeof JobTitleWidget === 'undefined' || 
+                    typeof LocationAutocomplete === 'undefined' ||
+                    typeof DEPARTMENTS === 'undefined' ||
+                    typeof SENIORITIES === 'undefined') {
+                    console.error('Required globals not loaded yet, retrying...');
+                    setTimeout(() => {
+                        const csvContainer = document.getElementById('csv_person_filters_container');
+                        if (csvContainer) {
+                            addCsvPersonFilter('SDR Count');
+                        }
+                    }, 500);
+                    return;
+                }
+                
                 // Ensure the CSV tab exists and add initial filter
                 const csvContainer = document.getElementById('csv_person_filters_container');
                 if (csvContainer) {
