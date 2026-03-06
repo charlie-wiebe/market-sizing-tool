@@ -31,19 +31,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def get_companies_without_enrichments(session, limit=None):
-    """Get companies that have NO HubSpot enrichments at all."""
-    query = session.query(Company)\
+def get_companies_without_enrichments_count(session):
+    """Get count of companies that have NO HubSpot enrichments at all."""
+    return session.query(Company)\
         .outerjoin(HubSpotEnrichment, 
                    (Company.id == HubSpotEnrichment.company_id) & 
                    (HubSpotEnrichment.is_active == True))\
         .filter(HubSpotEnrichment.id == None)\
-        .order_by(Company.id)
-    
-    if limit:
-        query = query.limit(limit)
-    
-    return query.all()
+        .count()
+
+def get_companies_without_enrichments_chunk(session, offset, limit):
+    """Get a chunk of companies that have NO HubSpot enrichments."""
+    return session.query(Company)\
+        .outerjoin(HubSpotEnrichment, 
+                   (Company.id == HubSpotEnrichment.company_id) & 
+                   (HubSpotEnrichment.is_active == True))\
+        .filter(HubSpotEnrichment.id == None)\
+        .order_by(Company.id)\
+        .offset(offset).limit(limit).all()
 
 def main():
     """Run HubSpot enrichment ONLY for companies with no existing enrichments."""
@@ -97,15 +102,19 @@ def main():
         
         logger.info(f"Using job ID: {target_job.id}")
         
-        # Get companies without enrichments
-        logger.info("Finding companies with NO HubSpot enrichments...")
-        companies = get_companies_without_enrichments(session, args.limit)
+        # Get count of companies without enrichments
+        logger.info("Counting companies with NO HubSpot enrichments...")
+        total_companies = get_companies_without_enrichments_count(session)
         
-        if not companies:
+        if total_companies == 0:
             logger.info("No companies found without HubSpot enrichments!")
             return
         
-        logger.info(f"Found {len(companies)} companies with NO HubSpot enrichments")
+        # Apply limit if specified
+        companies_to_process = min(total_companies, args.limit) if args.limit else total_companies
+        
+        logger.info(f"Found {total_companies} companies with NO HubSpot enrichments")
+        logger.info(f"Processing {companies_to_process} companies")
         
         if args.dry_run:
             logger.info("DRY RUN MODE - No enrichments will be created")
@@ -113,15 +122,25 @@ def main():
         # Initialize HubSpot cached client
         hubspot_client = HubSpotClientCached(session)
         
-        # Process in batches
+        # Process in batches using chunked queries
         total_processed = 0
         total_matches = 0
         total_created = 0
+        offset = 0
         
-        for i in range(0, len(companies), args.batch_size):
-            batch = companies[i:i + args.batch_size]
-            batch_num = (i // args.batch_size) + 1
-            total_batches = (len(companies) + args.batch_size - 1) // args.batch_size
+        while offset < companies_to_process:
+            # Calculate batch size for this iteration
+            remaining = companies_to_process - offset
+            current_batch_size = min(args.batch_size, remaining)
+            
+            # Load batch from database
+            batch = get_companies_without_enrichments_chunk(session, offset, current_batch_size)
+            
+            if not batch:
+                break
+                
+            batch_num = (offset // args.batch_size) + 1
+            total_batches = (companies_to_process + args.batch_size - 1) // args.batch_size
             
             logger.info(f"Processing batch {batch_num}/{total_batches} ({len(batch)} companies)...")
             
@@ -181,6 +200,9 @@ def main():
                     logger.debug(f"No match: {company.name} (ID: {company_id})")
             
             logger.info(f"Batch {batch_num} results: {batch_matches} matches, {batch_created} created")
+            
+            # Move to next batch
+            offset += current_batch_size
         
         # Final summary
         logger.info("="*60)
