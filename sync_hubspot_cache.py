@@ -8,6 +8,7 @@ Usage: python sync_hubspot_cache.py
 import sys
 import os
 import logging
+import time
 from datetime import datetime, UTC
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -43,6 +44,11 @@ class HubSpotCacheSync:
         engine = create_engine(get_database_url())
         Session = sessionmaker(bind=engine)
         self.session = Session()
+        
+        # Rate limiting: 5 requests per second for HubSpot API
+        self.max_requests_per_window = 5
+        self.window_duration = 1.0
+        self.request_times = []
     
     def get_last_sync_timestamp(self):
         """Get the last successful sync timestamp from metadata."""
@@ -54,6 +60,23 @@ class HubSpotCacheSync:
         if sync_record:
             return sync_record.last_sync_timestamp
         return None
+    
+    def _rate_limit_wait(self):
+        """Enforce rate limiting based on HubSpot's 5 requests per second limit."""
+        now = time.time()
+        
+        # Remove requests older than the window
+        self.request_times = [t for t in self.request_times if now - t < self.window_duration]
+        
+        # If we're at the limit, wait until we can make another request
+        if len(self.request_times) >= self.max_requests_per_window:
+            sleep_time = self.window_duration - (now - self.request_times[0]) + 0.1
+            if sleep_time > 0:
+                logger.info(f"Rate limiting: sleeping for {sleep_time:.2f} seconds")
+                time.sleep(sleep_time)
+        
+        # Record this request
+        self.request_times.append(time.time())
     
     def update_sync_metadata(self, status, records_added=0, records_removed=0, error_message=None):
         """Update sync metadata with results."""
