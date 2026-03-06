@@ -39,6 +39,12 @@ class HubSpotCacheSync:
         }
         self.base_url = "https://api.hubapi.com"
         
+        # Rate limiting setup
+        import time
+        self.request_times = []
+        self.max_requests = 5  # 5 requests per second
+        self.window_duration = 1.0  # 1 second window
+        
         # Database setup
         engine = create_engine(get_database_url())
         Session = sessionmaker(bind=engine)
@@ -73,6 +79,24 @@ class HubSpotCacheSync:
         sync_record.updated_at = datetime.now(UTC)
         
         self.session.commit()
+    
+    def _rate_limit_wait(self):
+        """Enforce rate limiting based on HubSpot's 5 requests per second limit."""
+        import time
+        now = time.time()
+        
+        # Remove requests older than the window
+        self.request_times = [t for t in self.request_times if now - t < self.window_duration]
+        
+        # If we're at the limit, wait until we can make another request
+        if len(self.request_times) >= self.max_requests:
+            sleep_time = self.window_duration - (now - self.request_times[0])
+            if sleep_time > 0:
+                logger.info(f"Rate limiting: sleeping for {sleep_time:.2f} seconds")
+                time.sleep(sleep_time)
+        
+        # Record this request
+        self.request_times.append(time.time())
     
     def get_archived_companies(self, last_sync_timestamp):
         """Get companies archived since last sync."""
