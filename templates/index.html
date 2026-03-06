@@ -970,39 +970,7 @@
             if (companyHcByDeptWidget) companyHcByDeptWidget.onChange = originalOnChange(companyHcByDeptWidget, companyHcByDeptWidget.onChange);
         }
 
-        // ========== Init on page load ==========
-        initCompanyWidgets();
-        
-        // Try to load saved state, otherwise add default person filter
-        if (!loadFormState()) {
-            addPersonFilter('SDR Count');
-        }
-        
-        setupAutoSave();
-        
         // ========== CSV Upload Functions ==========
-        
-        // File input handler
-        document.getElementById('csv_file_input').addEventListener('change', handleCsvFileSelect);
-        
-        // Drag and drop handlers
-        const dropZone = document.querySelector('#tab-content-csv .border-dashed');
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('border-indigo-500', 'bg-indigo-50');
-        });
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('border-indigo-500', 'bg-indigo-50');
-        });
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('border-indigo-500', 'bg-indigo-50');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                document.getElementById('csv_file_input').files = files;
-                handleCsvFileSelect({ target: { files } });
-            }
-        });
         
         function handleCsvFileSelect(e) {
             csvFile = e.target.files[0];
@@ -1108,6 +1076,20 @@
             const idx = csvPersonFilterIndex++;
             const container = document.getElementById('csv_person_filters_container');
             
+            if (!container) {
+                console.error('CSV person filters container not found');
+                return;
+            }
+            
+            // Debug: Check if widget classes are available
+            console.log('Widget classes available:', {
+                IncludeExcludeSelect: typeof IncludeExcludeSelect !== 'undefined',
+                JobTitleWidget: typeof JobTitleWidget !== 'undefined',
+                LocationAutocomplete: typeof LocationAutocomplete !== 'undefined',
+                DEPARTMENTS: typeof DEPARTMENTS !== 'undefined',
+                SENIORITIES: typeof SENIORITIES !== 'undefined'
+            });
+            
             const block = document.createElement('div');
             block.className = 'border rounded-lg p-4 relative';
             block.id = `csv_person_filter_${idx}`;
@@ -1149,22 +1131,32 @@
             container.appendChild(block);
             
             // Initialize widgets (same as regular person filters)
+            const deptContainer = document.getElementById(`csv_person_dept_${idx}`);
+            const seniorityContainer = document.getElementById(`csv_person_seniority_${idx}`);
+            const jobTitleContainer = document.getElementById(`csv_person_job_title_${idx}`);
+            const locationContainer = document.getElementById(`csv_person_location_${idx}`);
+            
+            if (!deptContainer || !seniorityContainer || !jobTitleContainer || !locationContainer) {
+                console.error('CSV person filter containers not found for index', idx);
+                return;
+            }
+            
             const deptWidget = new IncludeExcludeSelect(
-                document.getElementById(`csv_person_dept_${idx}`),
+                deptContainer,
                 DEPARTMENTS,
                 { tree: true, includeSelected: name === 'SDR Count' ? ['Sales Development'] : [] }
             );
             
             const seniorityWidget = new IncludeExcludeSelect(
-                document.getElementById(`csv_person_seniority_${idx}`),
+                seniorityContainer,
                 SENIORITIES,
                 { tree: false, includeSelected: name === 'SDR Count' ? ['Entry', 'Senior'] : [] }
             );
             
-            const jobTitleWidget = new JobTitleWidget(document.getElementById(`csv_person_job_title_${idx}`));
+            const jobTitleWidget = new JobTitleWidget(jobTitleContainer);
             
             const locationWidget = new LocationAutocomplete(
-                document.getElementById(`csv_person_location_${idx}`),
+                locationContainer,
                 { includeValues: name === 'SDR Count' ? ['United States #US'] : [] }
             );
             
@@ -1287,10 +1279,44 @@
             });
         }
         
-        // Initialize with one person filter for CSV tab after page load
-        document.addEventListener('DOMContentLoaded', () => {
-            // Ensure lucide icons are created
-            lucide.createIcons();
+        // Wait for all scripts and DOM to be ready
+        window.addEventListener('load', () => {
+            // Initialize widgets after everything is loaded
+            initCompanyWidgets();
+            
+            // Try to load saved state, otherwise add default person filter
+            if (!loadFormState()) {
+                addPersonFilter('SDR Count');
+            }
+            
+            setupAutoSave();
+            
+            // CSV Upload event handlers
+            const csvFileInput = document.getElementById('csv_file_input');
+            if (csvFileInput) {
+                csvFileInput.addEventListener('change', handleCsvFileSelect);
+            }
+            
+            const dropZone = document.querySelector('#tab-content-csv .border-dashed');
+            if (dropZone) {
+                dropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.add('border-indigo-500', 'bg-indigo-50');
+                });
+                dropZone.addEventListener('dragleave', () => {
+                    dropZone.classList.remove('border-indigo-500', 'bg-indigo-50');
+                });
+                dropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('border-indigo-500', 'bg-indigo-50');
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        csvFileInput.files = files;
+                        handleCsvFileSelect({ target: { files } });
+                    }
+                });
+            }
+            
             // Add initial CSV person filter
             addCsvPersonFilter('SDR Count');
         });
