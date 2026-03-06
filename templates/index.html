@@ -1151,40 +1151,45 @@
                 return;
             }
             
-            // Initialize widgets with timeout to ensure components are loaded
-            setTimeout(() => {
-                // Initialize department widget
-                const deptWidget = new IncludeExcludeSelect(
-                    deptContainer,
-                    DEPARTMENTS,
-                    { tree: true, includeSelected: filterName === 'SDR Count' ? ['Sales Development'] : [] }
-                );
-                
-                // Initialize seniority widget
-                const seniorityWidget = new IncludeExcludeSelect(
-                    seniorityContainer,
-                    SENIORITIES,
-                    { tree: false, includeSelected: filterName === 'SDR Count' ? ['Entry', 'Senior'] : [] }
-                );
-                
-                // Initialize job title widget
-                const jobTitleWidget = new JobTitleWidget(jobTitleContainer);
-                
-                // Initialize location widget
-                const locationWidget = new LocationAutocomplete(
-                    locationContainer,
-                    { includeValues: filterName === 'SDR Count' ? ['United States #US'] : [] }
-                );
-                
-                // Store widgets
-                csvPersonBlocks[idx] = {
-                    name: filterName,
-                    dept: deptWidget,
-                    seniority: seniorityWidget,
-                    jobTitle: jobTitleWidget,
-                    location: locationWidget
-                };
-            }, 0);
+            // Check if widget classes exist
+            if (!window.IncludeExcludeSelect || !window.JobTitleWidget || !window.LocationAutocomplete) {
+                console.error('Widget classes not found in window scope');
+                console.log('Available:', {
+                    IncludeExcludeSelect: typeof window.IncludeExcludeSelect,
+                    JobTitleWidget: typeof window.JobTitleWidget,
+                    LocationAutocomplete: typeof window.LocationAutocomplete
+                });
+                return;
+            }
+            
+            // Initialize widgets immediately like regular person filters
+            const deptWidget = new window.IncludeExcludeSelect(
+                deptContainer,
+                window.DEPARTMENTS || [],
+                { tree: true, includeSelected: filterName === 'SDR Count' ? ['Sales Development'] : [] }
+            );
+            
+            const seniorityWidget = new window.IncludeExcludeSelect(
+                seniorityContainer,
+                window.SENIORITIES || [],
+                { tree: false, includeSelected: filterName === 'SDR Count' ? ['Entry', 'Senior'] : [] }
+            );
+            
+            const jobTitleWidget = new window.JobTitleWidget(jobTitleContainer);
+            
+            const locationWidget = new window.LocationAutocomplete(
+                locationContainer,
+                { includeValues: filterName === 'SDR Count' ? ['United States #US'] : [] }
+            );
+            
+            // Store widgets
+            csvPersonBlocks[idx] = {
+                name: filterName,
+                dept: deptWidget,
+                seniority: seniorityWidget,
+                jobTitle: jobTitleWidget,
+                location: locationWidget
+            };
             
             lucide.createIcons();
             
