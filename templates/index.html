@@ -285,22 +285,23 @@
                     </div>
                     
                     <!-- Person Filters for CSV -->
-                    <div class="bg-white rounded-lg shadow p-6">
+                    <div class="bg-white rounded-lg shadow p-6" id="csv_person_filters_section">
                         <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
-                            <i data-lucide="users" class="w-5 h-5"></i>
+                            <i data-lucide="users" class="w-5 h-5 text-indigo-600"></i>
                             Person Search Definitions
                         </h2>
                         
-                        <div id="csv_person_filters_container" class="space-y-4">
-                            <!-- Person filter blocks will be added here -->
+                        <div id="csv_person_filters_container" class="space-y-4 mb-4">
+                            <!-- Person filters will be added here dynamically -->
                         </div>
                         
-                        <button onclick="addCsvPersonFilter()" class="mt-4 px-4 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex items-center gap-2">
+                        <button type="button" id="csv_add_person_filter_btn" class="text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
                             <i data-lucide="plus" class="w-4 h-4"></i>
                             Add Person Filter
                         </button>
                     </div>
                 </div>
+<!-- ... -->
                 
                 <!-- CSV Upload Actions -->
                 <div>
@@ -1150,21 +1151,26 @@
                 return;
             }
             
-            try {
+            // Initialize widgets with timeout to ensure components are loaded
+            setTimeout(() => {
+                // Initialize department widget
                 const deptWidget = new IncludeExcludeSelect(
                     deptContainer,
                     DEPARTMENTS,
                     { tree: true, includeSelected: filterName === 'SDR Count' ? ['Sales Development'] : [] }
                 );
                 
+                // Initialize seniority widget
                 const seniorityWidget = new IncludeExcludeSelect(
                     seniorityContainer,
                     SENIORITIES,
                     { tree: false, includeSelected: filterName === 'SDR Count' ? ['Entry', 'Senior'] : [] }
                 );
                 
+                // Initialize job title widget
                 const jobTitleWidget = new JobTitleWidget(jobTitleContainer);
                 
+                // Initialize location widget
                 const locationWidget = new LocationAutocomplete(
                     locationContainer,
                     { includeValues: filterName === 'SDR Count' ? ['United States #US'] : [] }
@@ -1178,11 +1184,7 @@
                     jobTitle: jobTitleWidget,
                     location: locationWidget
                 };
-                
-                console.log(`CSV person filter ${idx} widgets initialized successfully`);
-            } catch (error) {
-                console.error(`Failed to initialize CSV person filter ${idx}:`, error);
-            }
+            }, 0);
             
             lucide.createIcons();
             
@@ -1329,21 +1331,22 @@
                 });
             }
             
-            // Add initial CSV person filter
+            // Set up CSV add person filter button
+            const csvAddBtn = document.getElementById('csv_add_person_filter_btn');
+            if (csvAddBtn) {
+                csvAddBtn.addEventListener('click', () => addCsvPersonFilter());
+            }
+            
+            // Add initial CSV person filter with delay to ensure everything is loaded
             setTimeout(() => {
-                console.log('Testing widget initialization manually...');
-                const testContainer = document.createElement('div');
-                document.body.appendChild(testContainer);
-                try {
-                    const testWidget = new IncludeExcludeSelect(testContainer, DEPARTMENTS, {tree: true});
-                    console.log('Test widget created successfully:', testWidget);
-                    testContainer.remove();
-                } catch (e) {
-                    console.error('Test widget creation failed:', e);
+                // Ensure the CSV tab exists and add initial filter
+                const csvContainer = document.getElementById('csv_person_filters_container');
+                if (csvContainer) {
+                    addCsvPersonFilter('SDR Count');
+                } else {
+                    console.error('CSV person filters container not found on page load');
                 }
-                
-                addCsvPersonFilter('SDR Count');
-            }, 1000);
+            }, 100);
         });
     </script>
 </body>
