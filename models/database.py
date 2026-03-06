@@ -208,7 +208,8 @@ class PersonCount(db.Model):
     __tablename__ = 'person_counts'
     
     id = db.Column(db.Integer, primary_key=True)
-    company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
+    company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=True)  # Nullable for CSV uploads
+    csv_company_id = db.Column(db.Integer, db.ForeignKey('csv_companies.id'), nullable=True)  # For CSV uploads
     job_id = db.Column(db.Integer, db.ForeignKey('jobs.id'), nullable=False)
     prospeo_company_id = db.Column(db.String(100), index=True)  # Link to company's prospeo ID
     query_name = db.Column(db.String(255), nullable=False)  # Name of the person search query
@@ -236,7 +237,8 @@ class HubSpotEnrichment(db.Model):
     __tablename__ = 'hubspot_enrichments'
     
     id = db.Column(db.Integer, primary_key=True)
-    company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
+    company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=True)  # Nullable for CSV uploads
+    csv_company_id = db.Column(db.Integer, db.ForeignKey('csv_companies.id'), nullable=True)  # For CSV uploads
     job_id = db.Column(db.Integer, db.ForeignKey('jobs.id'), nullable=False)
     hubspot_object_id = db.Column(db.String(100), index=True)  # HubSpot record ID
     vertical = db.Column(db.String(255))  # HubSpot vertical field
@@ -302,5 +304,31 @@ class CompanyJobReference(db.Model):
             'id': self.id,
             'company_id': self.company_id,
             'job_id': self.job_id,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class CsvCompany(db.Model):
+    __tablename__ = 'csv_companies'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(db.Integer, db.ForeignKey('jobs.id'), nullable=False)
+    hubspot_object_id = db.Column(db.String(100), nullable=False, index=True)
+    domain = db.Column(db.String(255), nullable=False, index=True)
+    company_name = db.Column(db.String(500))  # From HubSpot cache
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+    
+    # Relationships
+    job = db.relationship('Job', backref='csv_companies')
+    person_counts = db.relationship('PersonCount', backref='csv_company', lazy='dynamic')
+    hubspot_enrichments = db.relationship('HubSpotEnrichment', backref='csv_company', lazy='dynamic')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'job_id': self.job_id,
+            'hubspot_object_id': self.hubspot_object_id,
+            'domain': self.domain,
+            'company_name': self.company_name,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

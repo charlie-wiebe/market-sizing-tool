@@ -1,6 +1,6 @@
 import threading
 from datetime import datetime, timedelta
-from models.database import db, Job, Company, PersonCount, HubSpotEnrichment, CompanyJobReference
+from models.database import db, Job, Company, PersonCount, HubSpotEnrichment, CompanyJobReference, CsvCompany, HubSpotCache
 from services.prospeo_client import ProspeoClient
 from services.domain_utils import registrable_root_domain
 from services.query_segmenter import QuerySegmenter
@@ -70,6 +70,18 @@ class MarketSizingJob:
         logger.info(f"  Skip existing person counts: {job.skip_existing_person_counts}")
         logger.info(f"  Skip existing HubSpot: {job.skip_existing_hubspot}")
         logger.info(f"  Max data age: {job.max_data_age_days} days")
+        logger.info(f"  Job mode: {job.mode}")
+        
+        # Route to appropriate execution method based on job mode
+        if job.mode == 'csv_upload':
+            return self._execute_csv_upload_job(job)
+        else:
+            # Standard Prospeo company search + person search execution
+            return self._execute_standard_job(job)
+    
+    def _execute_standard_job(self, job):
+        import logging
+        logger = logging.getLogger(__name__)
         
         # Normalize company search filters
         normalized_company_filters = self._prepare_company_search_filters(job.company_filters)
@@ -795,6 +807,152 @@ class MarketSizingJob:
                         HubSpotEnrichment.hubspot_object_id.isnot(None),
                         HubSpotEnrichment.is_active == True
                     ).first()
+        
+        return existing
+
+    def _execute_csv_upload_job(self, job):
+        """Execute CSV upload job - skip company search, run person searches directly."""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Get CSV companies for this job
+        csv_companies = CsvCompany.query.filter_by(job_id=job.id).all()
+        
+        if not csv_companies:
+            job.error_message = "No CSV companies found for this job"
+            logger.error(f"JOB {job.id}: {job.error_message}")
+            return
+        
+        logger.info(f"JOB {job.id}: Processing {len(csv_companies)} CSV companies")
+        
+        credits_used = 0
+        companies_processed = 0
+        person_counts_skipped = 0
+        
+        for csv_company in csv_companies:
+            if self._stop_requested:
+                break
+            
+            logger.info(f"JOB {job.id}: Processing CSV company {csv_company.company_name or csv_company.domain} (HubSpot ID: {csv_company.hubspot_object_id})")
+            
+            # Process person counts for each persona
+            if job.person_filters:
+                person_credits = self._process_csv_person_counts(job, csv_company)
+                credits_used += person_credits
+            
+            # Create HubSpot enrichment from cache data
+            self._create_csv_hubspot_enrichment(job, csv_company)
+            
+            companies_processed += 1
+            
+            # Log progress periodically
+            if companies_processed % 10 == 0:
+                logger.info(f"JOB {job.id}: Progress - Processed: {companies_processed}/{len(csv_companies)}, Credits: {credits_used}")
+                
+                job.processed_companies = companies_processed
+                job.actual_credits = credits_used
+                db.session.commit()
+        
+        # Final update
+        job.processed_companies = companies_processed
+        job.actual_credits = credits_used
+        db.session.commit()
+        
+        logger.info(f"JOB {job.id}: CSV upload job completed - Processed: {companies_processed}, Credits: {credits_used}")
+
+    def _process_csv_person_counts(self, job, csv_company):
+        """Process person counts for CSV company with deduplication."""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        credits_used = 0
+        person_counts_skipped = 0
+        
+        for person_config in job.person_filters:
+            query_name = person_config.get("name", "Unnamed Query")
+            
+            # Check for existing person count data by domain
+            if job.skip_existing_person_counts:
+                existing_count = self._find_existing_person_count_by_domain(csv_company.domain, query_name, job.max_data_age_days)
+                if existing_count and existing_count.status == 'ok':
+                    logger.debug(f"Skipping person count for {csv_company.company_name} - {query_name}: existing data found (count: {existing_count.total_count})")
+                    
+                    # Create new PersonCount linked to csv_company but copy existing data
+                    person_count = PersonCount(
+                        csv_company_id=csv_company.id,
+                        job_id=job.id,
+                        query_name=query_name,
+                        total_count=existing_count.total_count,
+                        status=existing_count.status,
+                        error_code=existing_count.error_code,
+                        is_active=True
+                    )
+                    db.session.add(person_count)
+                    person_counts_skipped += 1
+                    continue
+            
+            # Run new person search
+            filters = self._prepare_person_search_filters(job, person_config)
+            result = self._execute_person_search(filters, csv_company.domain, csv_company, query_name)
+            credits_used += 1
+            
+            # Save result linked to csv_company
+            if result:
+                person_count = PersonCount(
+                    csv_company_id=csv_company.id,
+                    job_id=job.id,
+                    query_name=query_name,
+                    total_count=result.get("total_count", 0),
+                    status=result.get("status", "ok"),
+                    error_code=result.get("error_code"),
+                    is_active=True
+                )
+                db.session.add(person_count)
+        
+        if person_counts_skipped > 0:
+            logger.info(f"JOB {job.id}: Skipped {person_counts_skipped} person count queries for {csv_company.company_name} (existing data)")
+        
+        return credits_used
+
+    def _create_csv_hubspot_enrichment(self, job, csv_company):
+        """Create HubSpot enrichment for CSV company using cache data."""
+        # Get HubSpot cache data
+        cache_record = HubSpotCache.query.filter_by(hubspot_object_id=csv_company.hubspot_object_id).first()
+        
+        if cache_record:
+            # Create HubSpot enrichment linked to csv_company
+            enrichment = HubSpotEnrichment(
+                csv_company_id=csv_company.id,
+                job_id=job.id,
+                hubspot_object_id=csv_company.hubspot_object_id,
+                vertical=cache_record.vertical,
+                lookup_method='csv_upload',  # Special method for CSV uploads
+                hubspot_created_date=cache_record.hubspot_created_date,
+                is_active=True
+            )
+            db.session.add(enrichment)
+
+    def _find_existing_person_count_by_domain(self, domain, query_name, max_age_days):
+        """Find existing person count by domain across all companies."""
+        from datetime import datetime, timedelta
+        max_age = datetime.utcnow() - timedelta(days=max_age_days)
+        
+        root_domain = registrable_root_domain(domain)
+        if not root_domain:
+            return None
+        
+        # Look for existing person counts by domain in both regular companies and csv_companies
+        existing = PersonCount.query.join(Company, PersonCount.company_id == Company.id, isouter=True)\
+            .join(CsvCompany, PersonCount.csv_company_id == CsvCompany.id, isouter=True)\
+            .filter(
+                or_(
+                    and_(Company.id.isnot(None), or_(Company.domain == root_domain, Company.website == root_domain)),
+                    and_(CsvCompany.id.isnot(None), CsvCompany.domain == root_domain)
+                ),
+                PersonCount.query_name == query_name,
+                PersonCount.created_at >= max_age,
+                PersonCount.is_active == True
+            ).first()
         
         return existing
 

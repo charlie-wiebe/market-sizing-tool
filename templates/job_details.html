@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Job Details - {{ job.name }}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        .tab-active { color: #4F46E5; border-color: #4F46E5; }
+        .tab-inactive { color: #6B7280; border-color: transparent; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <header class="mb-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">{{ job.name }}</h1>
+                    <p class="text-gray-600 mt-1">Job #{{ job.id }} - {{ job.mode|title }} Mode</p>
+                </div>
+                <a href="/" class="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">
+                    Back to Home
+                </a>
+            </div>
+        </header>
+
+        <!-- Job Status -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Job Status</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <p class="text-sm text-gray-600">Status</p>
+                    <p class="font-semibold {% if job.status == 'completed' %}text-green-600{% elif job.status == 'failed' %}text-red-600{% else %}text-yellow-600{% endif %}">
+                        {{ job.status|title }}
+                    </p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Created</p>
+                    <p class="font-semibold">{{ job.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                </div>
+                {% if job.mode == 'csv_upload' %}
+                <div>
+                    <p class="text-sm text-gray-600">CSV Companies</p>
+                    <p class="font-semibold">{{ job.csv_companies.count() }}</p>
+                </div>
+                {% else %}
+                <div>
+                    <p class="text-sm text-gray-600">Total Companies</p>
+                    <p class="font-semibold">{{ job.total_companies or 0 }}</p>
+                </div>
+                {% endif %}
+                <div>
+                    <p class="text-sm text-gray-600">Credits Used</p>
+                    <p class="font-semibold">{{ job.actual_credits or 0 }}</p>
+                </div>
+            </div>
+            {% if job.error_message %}
+            <div class="mt-4 p-3 bg-red-50 text-red-700 rounded">
+                <strong>Error:</strong> {{ job.error_message }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Tabs -->
+        <div class="border-b mb-6">
+            <nav class="flex gap-1">
+                <button onclick="switchTab('results')" id="tab-btn-results" class="px-4 py-2 text-sm font-medium border-b-2 tab-active">Results</button>
+                <button onclick="switchTab('config')" id="tab-btn-config" class="px-4 py-2 text-sm font-medium border-b-2 tab-inactive">Configuration</button>
+                {% if job.mode == 'csv_upload' %}
+                <button onclick="switchTab('export')" id="tab-btn-export" class="px-4 py-2 text-sm font-medium border-b-2 tab-inactive">Export</button>
+                {% endif %}
+            </nav>
+        </div>
+
+        <!-- Results Tab -->
+        <div id="tab-content-results">
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                {% if job.mode == 'csv_upload' %}
+                <!-- CSV Upload Results -->
+                <div class="p-6">
+                    <h3 class="text-lg font-semibold mb-4">CSV Upload Results</h3>
+                    {% if job.csv_companies.count() > 0 %}
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left">Company</th>
+                                    <th class="px-4 py-3 text-left">HubSpot ID</th>
+                                    <th class="px-4 py-3 text-left">Domain</th>
+                                    {% for pf in job.person_filters %}
+                                    <th class="px-4 py-3 text-right">{{ pf.name }}</th>
+                                    {% endfor %}
+                                    <th class="px-4 py-3 text-left">Vertical</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y">
+                                {% for csv_company in job.csv_companies %}
+                                <tr>
+                                    <td class="px-4 py-3">{{ csv_company.company_name or csv_company.domain }}</td>
+                                    <td class="px-4 py-3">{{ csv_company.hubspot_object_id }}</td>
+                                    <td class="px-4 py-3">{{ csv_company.domain }}</td>
+                                    {% for pf in job.person_filters %}
+                                    {% set pc = csv_company.person_counts.filter_by(query_name=pf.name, is_active=True).first() %}
+                                    <td class="px-4 py-3 text-right">
+                                        {% if pc %}
+                                            {% if pc.status == 'ok' %}
+                                                {{ pc.total_count }}
+                                            {% else %}
+                                                <span class="text-red-500" title="{{ pc.error_code }}">Error</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-gray-400">-</span>
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                    {% set enrichment = csv_company.hubspot_enrichments.filter_by(is_active=True).first() %}
+                                    <td class="px-4 py-3">{{ enrichment.vertical if enrichment else '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-gray-500">No CSV companies found for this job.</p>
+                    {% endif %}
+                </div>
+                {% else %}
+                <!-- Standard Job Results -->
+                <div class="p-6">
+                    <h3 class="text-lg font-semibold mb-4">Company Results</h3>
+                    {% if job.companies.count() > 0 %}
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left">Company</th>
+                                    <th class="px-4 py-3 text-left">Domain</th>
+                                    <th class="px-4 py-3 text-left">Location</th>
+                                    <th class="px-4 py-3 text-left">Industry</th>
+                                    <th class="px-4 py-3 text-right">Employees</th>
+                                    {% for pf in job.person_filters %}
+                                    <th class="px-4 py-3 text-right">{{ pf.name }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y">
+                                {% for company in job.companies.limit(100) %}
+                                <tr>
+                                    <td class="px-4 py-3">{{ company.name }}</td>
+                                    <td class="px-4 py-3">{{ company.domain or company.website or '-' }}</td>
+                                    <td class="px-4 py-3">{{ company.city }}, {{ company.country }}</td>
+                                    <td class="px-4 py-3">{{ company.industry or '-' }}</td>
+                                    <td class="px-4 py-3 text-right">{{ company.employees_range or '-' }}</td>
+                                    {% for pf in job.person_filters %}
+                                    {% set pc = company.person_counts.filter_by(query_name=pf.name, job_id=job.id, is_active=True).first() %}
+                                    <td class="px-4 py-3 text-right">
+                                        {% if pc %}
+                                            {% if pc.status == 'ok' %}
+                                                {{ pc.total_count }}
+                                            {% else %}
+                                                <span class="text-red-500" title="{{ pc.error_code }}">Error</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-gray-400">-</span>
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% if job.companies.count() > 100 %}
+                    <p class="mt-4 text-sm text-gray-600">Showing first 100 of {{ job.companies.count() }} companies</p>
+                    {% endif %}
+                    {% else %}
+                    <p class="text-gray-500">No companies found for this job.</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Configuration Tab -->
+        <div id="tab-content-config" class="hidden">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold mb-4">Job Configuration</h3>
+                
+                {% if job.mode != 'csv_upload' %}
+                <!-- Company Filters -->
+                <div class="mb-6">
+                    <h4 class="font-medium text-gray-700 mb-2">Company Filters</h4>
+                    <pre class="bg-gray-50 p-4 rounded text-xs overflow-x-auto">{{ job.company_filters|tojson(indent=2) }}</pre>
+                </div>
+                {% endif %}
+                
+                <!-- Person Filters -->
+                <div class="mb-6">
+                    <h4 class="font-medium text-gray-700 mb-2">Person Filters</h4>
+                    <pre class="bg-gray-50 p-4 rounded text-xs overflow-x-auto">{{ job.person_filters|tojson(indent=2) }}</pre>
+                </div>
+                
+                <!-- Settings -->
+                <div>
+                    <h4 class="font-medium text-gray-700 mb-2">Settings</h4>
+                    <dl class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <dt class="text-gray-600">Skip Existing Companies</dt>
+                            <dd class="font-medium">{{ job.skip_existing_companies }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-gray-600">Skip Existing Person Counts</dt>
+                            <dd class="font-medium">{{ job.skip_existing_person_counts }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-gray-600">Skip Existing HubSpot</dt>
+                            <dd class="font-medium">{{ job.skip_existing_hubspot }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-gray-600">Max Data Age (days)</dt>
+                            <dd class="font-medium">{{ job.max_data_age_days }}</dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Tab (CSV Upload Only) -->
+        {% if job.mode == 'csv_upload' %}
+        <div id="tab-content-export" class="hidden">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold mb-4">Export Results</h3>
+                
+                <p class="text-gray-600 mb-6">Export your CSV upload job results in various formats.</p>
+                
+                <div class="space-y-4">
+                    <button onclick="exportCsv({{ job.id }})" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 flex items-center gap-2">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                        Export as CSV
+                    </button>
+                    
+                    <div class="mt-6 p-4 bg-gray-50 rounded">
+                        <h4 class="font-medium mb-2">SQL Export Query</h4>
+                        <pre class="bg-white p-3 rounded border text-xs overflow-x-auto">SELECT 
+    j.name as job_name,
+    cc.company_name,
+    cc.domain,
+    cc.hubspot_object_id,
+    pc.query_name as persona,
+    pc.total_count,
+    he.vertical
+FROM jobs j
+JOIN csv_companies cc ON cc.job_id = j.id
+LEFT JOIN person_counts pc ON pc.csv_company_id = cc.id AND pc.is_active = true
+LEFT JOIN hubspot_enrichments he ON he.csv_company_id = cc.id AND he.is_active = true
+WHERE j.id = {{ job.id }}
+ORDER BY cc.company_name, pc.query_name;</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        lucide.createIcons();
+        
+        function switchTab(tab) {
+            // Hide all tabs
+            document.querySelectorAll('[id^="tab-content-"]').forEach(el => el.classList.add('hidden'));
+            // Show selected tab
+            document.getElementById(`tab-content-${tab}`).classList.remove('hidden');
+            
+            // Update button styles
+            document.querySelectorAll('[id^="tab-btn-"]').forEach(btn => {
+                if (btn.id === `tab-btn-${tab}`) {
+                    btn.className = btn.className.replace('tab-inactive', 'tab-active');
+                } else {
+                    btn.className = btn.className.replace('tab-active', 'tab-inactive');
+                }
+            });
+        }
+        
+        {% if job.mode == 'csv_upload' %}
+        function exportCsv(jobId) {
+            window.location.href = `/api/jobs/${jobId}/export/csv`;
+        }
+        {% endif %}
+    </script>
+</body>
+</html>

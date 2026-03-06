@@ -7,7 +7,7 @@ import csv
 import io
 
 from config import Config
-from models.database import db, Job, Company, PersonCount, HubSpotEnrichment, CompanyJobReference, generate_query_fingerprint
+from models.database import db, Job, Company, PersonCount, HubSpotEnrichment, CompanyJobReference, CsvCompany, HubSpotCache, generate_query_fingerprint
 from sqlalchemy import text
 from services.prospeo_client import ProspeoClient
 from services.query_segmenter import QuerySegmenter
@@ -25,7 +25,7 @@ try:
     with app.app_context():
         db.create_all()
         
-        # Safe migrations - add new SDR fields to HubSpot cache
+        # Safe migrations - add new SDR fields to HubSpot cache and CSV upload support
         from sqlalchemy import text
         with db.engine.connect() as conn:
             try:
@@ -36,6 +36,16 @@ try:
                 conn.execute(text("ALTER TABLE hubspot_company_cache ADD COLUMN IF NOT EXISTS keyplay_sdrs INTEGER"))
                 conn.execute(text("ALTER TABLE hubspot_company_cache ADD COLUMN IF NOT EXISTS clay_sdrs INTEGER"))
                 conn.execute(text("ALTER TABLE hubspot_company_cache ADD COLUMN IF NOT EXISTS final_sdrs INTEGER"))
+                
+                # CSV upload migrations
+                # Make company_id nullable for CSV uploads
+                conn.execute(text("ALTER TABLE person_counts ALTER COLUMN company_id DROP NOT NULL"))
+                conn.execute(text("ALTER TABLE hubspot_enrichments ALTER COLUMN company_id DROP NOT NULL"))
+                
+                # Add csv_company_id foreign keys
+                conn.execute(text("ALTER TABLE person_counts ADD COLUMN IF NOT EXISTS csv_company_id INTEGER REFERENCES csv_companies(id)"))
+                conn.execute(text("ALTER TABLE hubspot_enrichments ADD COLUMN IF NOT EXISTS csv_company_id INTEGER REFERENCES csv_companies(id)"))
+                
                 conn.commit()
             except Exception as e:
                 print(f"Migration note: {e}")
@@ -95,6 +105,12 @@ def index():
             job.hubspot_enrichment_percentage = 0
     
     return render_template("index.html", jobs=jobs)
+
+
+@app.route("/jobs/<int:job_id>")
+def job_details(job_id):
+    job = Job.query.get_or_404(job_id)
+    return render_template("job_details.html", job=job)
 
 
 @app.route("/health")
@@ -915,6 +931,253 @@ def refresh_hubspot_enrichments():
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ========== CSV UPLOAD ENDPOINTS ==========
+
+@app.route("/api/csv/validate", methods=["POST"])
+def validate_csv():
+    """Validate CSV format and content before upload."""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if not file or file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if not file.filename.lower().endswith('.csv'):
+            return jsonify({'error': 'File must be a CSV'}), 400
+        
+        # Read CSV content
+        csv_content = file.read().decode('utf-8')
+        file.seek(0)  # Reset file pointer
+        
+        # Parse CSV
+        csv_reader = csv.DictReader(io.StringIO(csv_content))
+        headers = csv_reader.fieldnames
+        
+        # Validate CSV structure
+        if not headers:
+            return jsonify({'error': 'CSV file is empty or has no headers'}), 400
+        
+        if len(headers) > 2:
+            return jsonify({'error': f'CSV has {len(headers)} columns, maximum 2 allowed'}), 400
+        
+        # Auto-detect required columns
+        hubspot_id_col = None
+        domain_col = None
+        
+        for header in headers:
+            header_lower = header.lower().strip()
+            if 'hubspot' in header_lower and 'id' in header_lower:
+                hubspot_id_col = header
+            elif 'domain' in header_lower:
+                domain_col = header
+        
+        if not hubspot_id_col or not domain_col:
+            return jsonify({
+                'error': 'Could not detect required columns. CSV must have columns for HubSpot ID and domain',
+                'detected_headers': headers
+            }), 400
+        
+        # Validate rows
+        rows = []
+        errors = []
+        valid_count = 0
+        
+        for row_num, row in enumerate(csv_reader, start=2):  # Start at 2 for header
+            hubspot_id = row.get(hubspot_id_col, '').strip()
+            domain = row.get(domain_col, '').strip()
+            
+            row_errors = []
+            
+            # Validate HubSpot ID
+            if not hubspot_id:
+                row_errors.append('HubSpot ID is empty')
+            elif not hubspot_id.isdigit():
+                row_errors.append('HubSpot ID must be numeric')
+            else:
+                # Check if HubSpot ID exists in cache
+                cache_record = HubSpotCache.query.filter_by(hubspot_object_id=hubspot_id).first()
+                if not cache_record:
+                    row_errors.append(f'HubSpot ID {hubspot_id} not found in cache')
+            
+            # Validate domain
+            if not domain:
+                row_errors.append('Domain is empty')
+            else:
+                try:
+                    normalized_domain = registrable_root_domain(domain)
+                    if not normalized_domain:
+                        row_errors.append('Invalid domain format')
+                except Exception:
+                    row_errors.append('Domain processing failed')
+            
+            if row_errors:
+                errors.append({'row': row_num, 'errors': row_errors})
+            else:
+                valid_count += 1
+                rows.append({
+                    'hubspot_id': hubspot_id,
+                    'domain': domain,
+                    'company_name': cache_record.company_name if cache_record else None
+                })
+        
+        return jsonify({
+            'valid': len(errors) == 0,
+            'total_rows': len(rows) + len(errors),
+            'valid_rows': valid_count,
+            'invalid_rows': len(errors),
+            'errors': errors[:10],  # Limit to first 10 errors for display
+            'sample_data': rows[:5],  # Show first 5 valid rows as preview
+            'detected_columns': {
+                'hubspot_id': hubspot_id_col,
+                'domain': domain_col
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"CSV validation error: {e}")
+        return jsonify({'error': f'Validation failed: {str(e)}'}), 500
+
+
+@app.route("/api/jobs/csv-upload", methods=["POST"])
+def create_csv_upload_job():
+    """Create a new CSV upload job."""
+    try:
+        # Get form data
+        job_name = request.form.get('job_name', f"CSV Upload {datetime.now(UTC).strftime('%Y-%m-%d %H:%M')}")
+        person_filters = json.loads(request.form.get('person_filters', '[]'))
+        
+        if 'file' not in request.files:
+            return jsonify({'error': 'No CSV file provided'}), 400
+        
+        file = request.files['file']
+        if not file or file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Read and parse CSV
+        csv_content = file.read().decode('utf-8')
+        csv_reader = csv.DictReader(io.StringIO(csv_content))
+        headers = csv_reader.fieldnames
+        
+        # Auto-detect columns (same logic as validation)
+        hubspot_id_col = None
+        domain_col = None
+        for header in headers:
+            header_lower = header.lower().strip()
+            if 'hubspot' in header_lower and 'id' in header_lower:
+                hubspot_id_col = header
+            elif 'domain' in header_lower:
+                domain_col = header
+        
+        if not hubspot_id_col or not domain_col:
+            return jsonify({'error': 'Required columns not found'}), 400
+        
+        # Create job
+        job = Job(
+            name=job_name,
+            status='pending',
+            mode='csv_upload',
+            person_filters=person_filters,
+            skip_existing_person_counts=True,  # Default to true for CSV uploads
+            max_data_age_days=30
+        )
+        db.session.add(job)
+        db.session.flush()  # Get job ID
+        
+        # Process CSV rows and create csv_companies
+        csv_companies_created = 0
+        for row in csv_reader:
+            hubspot_id = row.get(hubspot_id_col, '').strip()
+            domain = row.get(domain_col, '').strip()
+            
+            if hubspot_id and domain:
+                # Get company name from cache
+                cache_record = HubSpotCache.query.filter_by(hubspot_object_id=hubspot_id).first()
+                
+                csv_company = CsvCompany(
+                    job_id=job.id,
+                    hubspot_object_id=hubspot_id,
+                    domain=registrable_root_domain(domain) or domain,
+                    company_name=cache_record.company_name if cache_record else None
+                )
+                db.session.add(csv_company)
+                csv_companies_created += 1
+        
+        job.total_companies = csv_companies_created
+        db.session.commit()
+        
+        # Start job execution
+        job_runner = start_job_async(job.id, app)
+        running_jobs[job.id] = job_runner
+        
+        return jsonify({
+            'success': True,
+            'job': job.to_dict(),
+            'csv_companies_created': csv_companies_created
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"CSV upload job creation error: {e}")
+        return jsonify({'error': f'Failed to create job: {str(e)}'}), 500
+
+
+@app.route("/api/jobs/<int:job_id>/export/csv")
+def export_csv_job(job_id):
+    """Export CSV upload job results as CSV file."""
+    job = Job.query.get_or_404(job_id)
+    
+    if job.mode != 'csv_upload':
+        return jsonify({'error': 'Export only available for CSV upload jobs'}), 400
+    
+    # Create CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write headers
+    headers = ['Company Name', 'HubSpot ID', 'Domain']
+    for pf in job.person_filters:
+        headers.append(pf['name'])
+    headers.append('Vertical')
+    writer.writerow(headers)
+    
+    # Write data rows
+    for csv_company in job.csv_companies:
+        row = [
+            csv_company.company_name or csv_company.domain,
+            csv_company.hubspot_object_id,
+            csv_company.domain
+        ]
+        
+        # Add person counts for each filter
+        for pf in job.person_filters:
+            pc = csv_company.person_counts.filter_by(
+                query_name=pf['name'], 
+                is_active=True
+            ).first()
+            if pc and pc.status == 'ok':
+                row.append(pc.total_count)
+            else:
+                row.append('')
+        
+        # Add vertical from enrichment
+        enrichment = csv_company.hubspot_enrichments.filter_by(is_active=True).first()
+        row.append(enrichment.vertical if enrichment else '')
+        
+        writer.writerow(row)
+    
+    # Create response
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': f'attachment; filename=job_{job_id}_results.csv'
+        }
+    )
 
 
 if __name__ == "__main__":
