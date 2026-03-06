@@ -346,21 +346,20 @@ class HubSpotCacheSync:
                     logger.warning(f"Invalid response for ID reconciliation batch")
                     continue
                     
-                # Create lookup map of old ID -> new ID
-                id_updates = {}
-                for result in batch_response['results']:
-                    current_id = result['id']
-                    stored_id = result.get('properties', {}).get('hs_object_id')
-                    if stored_id and stored_id != current_id:
-                        id_updates[current_id] = stored_id
+                # Compare requested IDs vs returned IDs to detect merges
+                # When a company is merged, requesting old ID returns new ID
+                # HubSpot batch/read preserves order: batch[i] corresponds to results[i]
+                for idx, record in enumerate(batch):
+                    if idx < len(batch_response['results']):
+                        result = batch_response['results'][idx]
+                        requested_id = record.hubspot_object_id
+                        returned_id = result['id']
                         
-                # Update cache records that have ID mismatches
-                for record in batch:
-                    new_id = id_updates.get(record.hubspot_object_id)
-                    if new_id:
-                        logger.info(f"Updating HubSpot ID: {record.hubspot_object_id} -> {new_id}")
-                        record.hubspot_object_id = new_id
-                        updated_count += 1
+                        if requested_id != returned_id:
+                            logger.info(f"Detected merged company: {requested_id} -> {returned_id}")
+                            logger.info(f"Updating HubSpot ID: {record.hubspot_object_id} -> {returned_id}")
+                            record.hubspot_object_id = returned_id
+                            updated_count += 1
                         
             except requests.exceptions.RequestException as e:
                 logger.error(f"Failed to reconcile ID batch: {e}")
