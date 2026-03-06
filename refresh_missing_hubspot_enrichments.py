@@ -181,7 +181,9 @@ def main():
                                 company_id=company_id,
                                 job_id=target_job.id,
                                 hubspot_object_id=enrichment_data['hubspot_object_id'],
-                                properties=enrichment_data,
+                                vertical=enrichment_data.get('vertical'),
+                                lookup_method=enrichment_data.get('lookup_method'),
+                                hubspot_created_date=enrichment_data.get('hubspot_created_date'),
                                 is_active=True
                             )
                             session.add(new_enrichment)
