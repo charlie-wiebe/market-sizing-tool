@@ -833,3 +833,11 @@ class TimeRangeWidget {
         return Object.keys(result).length ? result : null;
     }
 }
+
+// Export all classes to window scope
+window.CheckboxMultiSelect = CheckboxMultiSelect;
+window.IncludeExcludeSelect = IncludeExcludeSelect;
+window.JobTitleWidget = JobTitleWidget;
+window.TimeRangeWidget = TimeRangeWidget;
+window.LocationAutocomplete = LocationAutocomplete;
+window.HeadcountByDeptWidget = HeadcountByDeptWidget;
