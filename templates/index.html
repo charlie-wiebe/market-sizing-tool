@@ -1081,14 +1081,15 @@
                 return;
             }
             
-            // Debug: Check if widget classes are available
-            console.log('Widget classes available:', {
-                IncludeExcludeSelect: typeof IncludeExcludeSelect !== 'undefined',
-                JobTitleWidget: typeof JobTitleWidget !== 'undefined',
-                LocationAutocomplete: typeof LocationAutocomplete !== 'undefined',
-                DEPARTMENTS: typeof DEPARTMENTS !== 'undefined',
-                SENIORITIES: typeof SENIORITIES !== 'undefined'
-            });
+            // Verify required classes exist
+            if (typeof IncludeExcludeSelect === 'undefined' || 
+                typeof JobTitleWidget === 'undefined' || 
+                typeof LocationAutocomplete === 'undefined') {
+                console.error('Required widget classes not loaded, retrying...');
+                csvPersonFilterIndex--; // Decrement to reuse the same index
+                setTimeout(() => addCsvPersonFilter(name), 500);
+                return;
+            }
             
             const block = document.createElement('div');
             block.className = 'border rounded-lg p-4 relative';
@@ -1170,10 +1171,6 @@
             
             lucide.createIcons();
             
-            // Add at least one person filter by default if none exist
-            if (csvPersonFilterIndex === 1) {
-                addCsvPersonFilter('SDR Count');
-            }
         }
         
         function removeCsvPersonFilter(idx) {
