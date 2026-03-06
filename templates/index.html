@@ -1099,9 +1099,8 @@
             
             block.innerHTML = `
                 <div class="flex justify-between items-start mb-3">
-                    <input type="text" value="${filterName}" class="font-medium text-lg border-b border-gray-300 focus:border-indigo-500 outline-none" 
-                           onchange="csvPersonBlocks[${idx}].name = this.value; saveFormState();">
-                    <button onclick="removeCsvPersonFilter(${idx})" class="text-red-500 hover:text-red-700">
+                    <input type="text" value="${filterName}" class="csv-person-query-name font-medium text-lg border-b border-gray-300 focus:border-indigo-500 outline-none">
+                    <button type="button" class="text-red-500 hover:text-red-700 csv-pf-remove">
                         <i data-lucide="x" class="w-5 h-5"></i>
                     </button>
                 </div>
@@ -1109,33 +1108,42 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                        <div id="csv_person_dept_${idx}"></div>
+                        <div class="csv-pf-department"></div>
                     </div>
                     
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Seniority</label>
-                        <div id="csv_person_seniority_${idx}"></div>
+                        <div class="csv-pf-seniority"></div>
                     </div>
                     
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
-                        <div id="csv_person_job_title_${idx}"></div>
+                        <div class="csv-pf-job-title"></div>
                     </div>
                     
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                        <div id="csv_person_location_${idx}"></div>
+                        <div class="csv-pf-location"></div>
                     </div>
                 </div>
             `;
             
             container.appendChild(block);
             
-            // Initialize widgets (same as regular person filters)
-            const deptContainer = document.getElementById(`csv_person_dept_${idx}`);
-            const seniorityContainer = document.getElementById(`csv_person_seniority_${idx}`);
-            const jobTitleContainer = document.getElementById(`csv_person_job_title_${idx}`);
-            const locationContainer = document.getElementById(`csv_person_location_${idx}`);
+            // Set up event handlers
+            block.querySelector('.csv-person-query-name').addEventListener('change', (e) => {
+                csvPersonBlocks[idx].name = e.target.value;
+            });
+            
+            block.querySelector('.csv-pf-remove').addEventListener('click', () => {
+                removeCsvPersonFilter(idx);
+            });
+            
+            // Initialize widgets using class selectors like regular person filters
+            const deptContainer = block.querySelector('.csv-pf-department');
+            const seniorityContainer = block.querySelector('.csv-pf-seniority');
+            const jobTitleContainer = block.querySelector('.csv-pf-job-title');
+            const locationContainer = block.querySelector('.csv-pf-location');
             
             if (!deptContainer || !seniorityContainer || !jobTitleContainer || !locationContainer) {
                 console.error('CSV person filter containers not found for index', idx);
