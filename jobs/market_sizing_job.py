@@ -518,7 +518,8 @@ class MarketSizingJob:
         
         search_filters["company"]["websites"]["include"] = [root_domain]
         
-        logger.debug(f"Executing person search for {company.name} - {query_name} with domain: {root_domain}")
+        company_display_name = getattr(company, 'company_name', None) or getattr(company, 'name', 'Unknown')
+        logger.debug(f"Executing person search for {company_display_name} - {query_name} with domain: {root_domain}")
         response = self.client.search_people(search_filters, page=1)
         
         result = {"total_count": 0, "status": "ok", "error_code": None}
@@ -526,11 +527,11 @@ class MarketSizingJob:
         if self.client.is_error(response):
             result["status"] = "error"
             result["error_code"] = self.client.get_error_code(response)
-            logger.warning(f"Person search failed for {company.name} - {query_name} (domain: {root_domain}): {result['error_code']}")
+            logger.warning(f"Person search failed for {company_display_name} - {query_name} (domain: {root_domain}): {result['error_code']}")
         else:
             pagination = self.client.get_pagination(response)
             result["total_count"] = pagination.get("total_count", 0)
-            logger.debug(f"Person search for {company.name} - {query_name} (domain: {root_domain}): {result['total_count']}")
+            logger.debug(f"Person search for {company_display_name} - {query_name} (domain: {root_domain}): {result['total_count']}")
         
         return result
     

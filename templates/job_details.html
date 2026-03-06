@@ -42,7 +42,7 @@
                 {% if job.mode == 'csv_upload' %}
                 <div>
                     <p class="text-sm text-gray-600">CSV Companies</p>
-                    <p class="font-semibold">{{ job.csv_companies.count() }}</p>
+                    <p class="font-semibold">{{ job.csv_companies|length }}</p>
                 </div>
                 {% else %}
                 <div>
