@@ -1152,22 +1152,33 @@
             }
             
             try {
+                // Use window references to ensure globals are available
+                const DeptClass = window.IncludeExcludeSelect || IncludeExcludeSelect;
+                const JobClass = window.JobTitleWidget || JobTitleWidget;
+                const LocClass = window.LocationAutocomplete || LocationAutocomplete;
+                const deptData = window.DEPARTMENTS || DEPARTMENTS || [];
+                const seniorityData = window.SENIORITIES || SENIORITIES || [];
+                
+                if (!DeptClass || !JobClass || !LocClass) {
+                    throw new Error('Widget classes not available');
+                }
+                
                 // Initialize widgets immediately like regular person filters
-                const deptWidget = new IncludeExcludeSelect(
+                const deptWidget = new DeptClass(
                     deptContainer,
-                    DEPARTMENTS,
+                    deptData,
                     { tree: true, includeSelected: filterName === 'SDR Count' ? ['Sales Development'] : [] }
                 );
                 
-                const seniorityWidget = new IncludeExcludeSelect(
+                const seniorityWidget = new DeptClass(
                     seniorityContainer,
-                    SENIORITIES,
+                    seniorityData,
                     { tree: false, includeSelected: filterName === 'SDR Count' ? ['Entry', 'Senior'] : [] }
                 );
                 
-                const jobTitleWidget = new JobTitleWidget(jobTitleContainer);
+                const jobTitleWidget = new JobClass(jobTitleContainer);
                 
-                const locationWidget = new LocationAutocomplete(
+                const locationWidget = new LocClass(
                     locationContainer,
                     { includeValues: filterName === 'SDR Count' ? ['United States #US'] : [] }
                 );
@@ -1182,6 +1193,13 @@
                 };
             } catch (error) {
                 console.error('Failed to initialize CSV person filter widgets:', error);
+                console.error('Available globals:', {
+                    IncludeExcludeSelect: typeof window.IncludeExcludeSelect,
+                    JobTitleWidget: typeof window.JobTitleWidget,
+                    LocationAutocomplete: typeof window.LocationAutocomplete,
+                    DEPARTMENTS: typeof window.DEPARTMENTS,
+                    SENIORITIES: typeof window.SENIORITIES
+                });
                 alert('Failed to initialize person filters. Please refresh the page and try again.');
             }
             
