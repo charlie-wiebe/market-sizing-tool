@@ -1150,32 +1150,39 @@
                 return;
             }
             
-            const deptWidget = new IncludeExcludeSelect(
-                deptContainer,
-                DEPARTMENTS,
-                { tree: true, includeSelected: name === 'SDR Count' ? ['Sales Development'] : [] }
-            );
-            
-            const seniorityWidget = new IncludeExcludeSelect(
-                seniorityContainer,
-                SENIORITIES,
-                { tree: false, includeSelected: name === 'SDR Count' ? ['Entry', 'Senior'] : [] }
-            );
-            
-            const jobTitleWidget = new JobTitleWidget(jobTitleContainer);
-            
-            const locationWidget = new LocationAutocomplete(
-                locationContainer,
-                { includeValues: name === 'SDR Count' ? ['United States #US'] : [] }
-            );
-            
-            csvPersonBlocks[idx] = {
-                name: filterName,
-                dept: deptWidget,
-                seniority: seniorityWidget,
-                jobTitle: jobTitleWidget,
-                location: locationWidget
-            };
+            try {
+                const deptWidget = new IncludeExcludeSelect(
+                    deptContainer,
+                    DEPARTMENTS,
+                    { tree: true, includeSelected: filterName === 'SDR Count' ? ['Sales Development'] : [] }
+                );
+                
+                const seniorityWidget = new IncludeExcludeSelect(
+                    seniorityContainer,
+                    SENIORITIES,
+                    { tree: false, includeSelected: filterName === 'SDR Count' ? ['Entry', 'Senior'] : [] }
+                );
+                
+                const jobTitleWidget = new JobTitleWidget(jobTitleContainer);
+                
+                const locationWidget = new LocationAutocomplete(
+                    locationContainer,
+                    { includeValues: filterName === 'SDR Count' ? ['United States #US'] : [] }
+                );
+                
+                // Store widgets
+                csvPersonBlocks[idx] = {
+                    name: filterName,
+                    dept: deptWidget,
+                    seniority: seniorityWidget,
+                    jobTitle: jobTitleWidget,
+                    location: locationWidget
+                };
+                
+                console.log(`CSV person filter ${idx} widgets initialized successfully`);
+            } catch (error) {
+                console.error(`Failed to initialize CSV person filter ${idx}:`, error);
+            }
             
             lucide.createIcons();
             
