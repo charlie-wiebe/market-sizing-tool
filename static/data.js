@@ -6,7 +6,7 @@ const EMPLOYEE_RANGES = [
 ];
 
 const SENIORITIES = [
-    "C-Suite", "Director", "Entry", "Founder/Owner", "Head",
+    "Volunteer", "C-Suite", "Director", "Entry", "Founder/Owner", "Head",
     "Intern", "Manager", "Partner", "Senior", "Vice President"
 ];
 
@@ -260,3 +260,9 @@ const INDUSTRIES = [
     "Mattress and Blinds Manufacturing", "Regenerative Design",
     "Primary Metal Manufacturing"
 ].sort();
+
+// Export to global scope
+window.DEPARTMENTS = DEPARTMENTS;
+window.SENIORITIES = SENIORITIES;
+window.EMPLOYEE_RANGES = EMPLOYEE_RANGES;
+window.INDUSTRIES = INDUSTRIES;
