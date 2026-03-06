@@ -1151,33 +1151,22 @@
                 return;
             }
             
-            // Check if widget classes exist
-            if (!window.IncludeExcludeSelect || !window.JobTitleWidget || !window.LocationAutocomplete) {
-                console.error('Widget classes not found in window scope');
-                console.log('Available:', {
-                    IncludeExcludeSelect: typeof window.IncludeExcludeSelect,
-                    JobTitleWidget: typeof window.JobTitleWidget,
-                    LocationAutocomplete: typeof window.LocationAutocomplete
-                });
-                return;
-            }
-            
             // Initialize widgets immediately like regular person filters
-            const deptWidget = new window.IncludeExcludeSelect(
+            const deptWidget = new IncludeExcludeSelect(
                 deptContainer,
-                window.DEPARTMENTS || [],
+                DEPARTMENTS,
                 { tree: true, includeSelected: filterName === 'SDR Count' ? ['Sales Development'] : [] }
             );
             
-            const seniorityWidget = new window.IncludeExcludeSelect(
+            const seniorityWidget = new IncludeExcludeSelect(
                 seniorityContainer,
-                window.SENIORITIES || [],
+                SENIORITIES,
                 { tree: false, includeSelected: filterName === 'SDR Count' ? ['Entry', 'Senior'] : [] }
             );
             
-            const jobTitleWidget = new window.JobTitleWidget(jobTitleContainer);
+            const jobTitleWidget = new JobTitleWidget(jobTitleContainer);
             
-            const locationWidget = new window.LocationAutocomplete(
+            const locationWidget = new LocationAutocomplete(
                 locationContainer,
                 { includeValues: filterName === 'SDR Count' ? ['United States #US'] : [] }
             );
