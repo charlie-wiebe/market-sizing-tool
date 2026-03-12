@@ -8,7 +8,7 @@ import io
 
 from config import Config
 from models.database import db, Job, Company, PersonCount, HubSpotEnrichment, CompanyJobReference, CsvCompany, HubSpotCache, generate_query_fingerprint
-from sqlalchemy import text
+from sqlalchemy import text, or_
 from services.prospeo_client import ProspeoClient
 from services.query_segmenter import QuerySegmenter
 from services.domain_utils import registrable_root_domain
@@ -488,13 +488,21 @@ def get_job_results(job_id):
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 50, type=int)
     
-    companies = Company.query.filter_by(job_id=job_id).paginate(
-        page=page, per_page=per_page, error_out=False
-    )
+    # Get companies: both directly owned AND linked via CompanyJobReference (deduplication)
+    referenced_ids = db.session.query(CompanyJobReference.company_id).filter_by(job_id=job_id)
+    companies = Company.query.filter(
+        or_(
+            Company.job_id == job_id,
+            Company.id.in_(referenced_ids)
+        )
+    ).paginate(page=page, per_page=per_page, error_out=False)
     
     results = []
     for company in companies.items:
         company_dict = company.to_dict()
+        # Override person_counts with job-specific active counts
+        active_pcs = company.person_counts.filter_by(job_id=job_id, is_active=True).all()
+        company_dict['person_counts'] = {pc.query_name: pc.total_count for pc in active_pcs}
         results.append(company_dict)
     
     person_counts_agg = db.session.query(
@@ -556,8 +564,14 @@ def export_job(job_id):
         writer.writerow(["Credits Used", job.actual_credits])
         writer.writerow(["Completed At", job.completed_at.isoformat() if job.completed_at else ""])
     else:
-        # Detailed mode: export per-company data
-        companies = Company.query.filter_by(job_id=job_id).all()
+        # Detailed mode: export per-company data (include deduplicated companies via references)
+        referenced_ids = db.session.query(CompanyJobReference.company_id).filter_by(job_id=job_id)
+        companies = Company.query.filter(
+            or_(
+                Company.job_id == job_id,
+                Company.id.in_(referenced_ids)
+            )
+        ).all()
         
         person_query_names = set()
         for pf in (job.person_filters or []):
@@ -599,7 +613,7 @@ def export_job(job_id):
         writer.writerow(headers)
         
         for company in companies:
-            person_counts = {pc.query_name: pc.total_count for pc in company.person_counts.filter_by(is_active=True)}
+            person_counts = {pc.query_name: pc.total_count for pc in company.person_counts.filter_by(job_id=job_id, is_active=True)}
             
             # Helper function to serialize JSON fields for CSV
             def serialize_json(value):
@@ -660,8 +674,11 @@ def export_job(job_id):
                 company.linkedin_id or ""
             ]
             
-            # HubSpot enrichment (cached to avoid multiple queries, filter for active only)
-            hubspot_enrichment = company.hubspot_enrichments.filter_by(is_active=True).first()
+            # HubSpot enrichment (job-specific, active only)
+            hubspot_enrichment = company.hubspot_enrichments.filter_by(job_id=job_id, is_active=True).first()
+            if not hubspot_enrichment:
+                # Fallback to any active enrichment for this company
+                hubspot_enrichment = company.hubspot_enrichments.filter_by(is_active=True).first()
             row.extend([
                 hubspot_enrichment.hubspot_object_id if hubspot_enrichment else "",
                 hubspot_enrichment.vertical if hubspot_enrichment else "",
