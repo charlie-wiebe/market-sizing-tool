@@ -1,0 +1,448 @@
+/* ============================================================
+   Nooks.ai-Inspired Theme Override
+   Loaded AFTER Tailwind — uses targeted selectors to restyle
+   the entire app without changing HTML structure.
+   ============================================================ */
+
+/* ---------- Web Font ---------- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ---------- CSS Variables ---------- */
+:root {
+  --nooks-purple: #7C3AED;
+  --nooks-purple-dark: #6D28D9;
+  --nooks-purple-light: #EDE9FE;
+  --nooks-purple-50: #F5F3FF;
+  --nooks-violet: #8B5CF6;
+  --nooks-indigo: #6366F1;
+  --nooks-bg: #F8F7FC;
+  --nooks-card: #FFFFFF;
+  --nooks-border: #E5E7EB;
+  --nooks-text: #1F2937;
+  --nooks-text-secondary: #6B7280;
+  --nooks-radius: 12px;
+  --nooks-shadow: 0 1px 3px rgba(124, 58, 237, 0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --nooks-shadow-lg: 0 4px 16px rgba(124, 58, 237, 0.08), 0 2px 4px rgba(0,0,0,0.04);
+}
+
+/* ---------- Base ---------- */
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  background: var(--nooks-bg) !important;
+  color: var(--nooks-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Typography ---------- */
+h1, h2, h3, h4 {
+  font-weight: 700 !important;
+  letter-spacing: -0.02em;
+  color: var(--nooks-text);
+}
+h1 { font-size: 1.75rem !important; }
+
+/* ---------- Header / Title Area ---------- */
+body > div > header,
+body > div > div > header {
+  background: linear-gradient(135deg, var(--nooks-purple) 0%, var(--nooks-indigo) 100%);
+  margin: -2rem -1rem 2rem -1rem;
+  padding: 2rem 1.5rem !important;
+  border-radius: 0 0 var(--nooks-radius) var(--nooks-radius);
+}
+body > div > header h1,
+body > div > div > header h1 {
+  color: #FFFFFF !important;
+}
+body > div > header p,
+body > div > div > header p {
+  color: rgba(255,255,255,0.8) !important;
+}
+
+/* ---------- Cards (bg-white rounded-lg shadow) ---------- */
+.bg-white.rounded-lg.shadow,
+.bg-white.rounded-lg.shadow.p-6,
+.bg-white.rounded-lg.shadow.overflow-hidden {
+  background: var(--nooks-card) !important;
+  border-radius: var(--nooks-radius) !important;
+  box-shadow: var(--nooks-shadow) !important;
+  border: 1px solid var(--nooks-border);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.bg-white.rounded-lg.shadow:hover,
+.bg-white.rounded-lg.shadow.p-6:hover {
+  box-shadow: var(--nooks-shadow-lg) !important;
+  border-color: #DDD6FE;
+}
+
+/* ---------- Section Headers inside cards ---------- */
+.bg-white.rounded-lg.shadow h2,
+.bg-white.rounded-lg.shadow.p-6 h2 {
+  font-size: 1.05rem !important;
+  font-weight: 600 !important;
+  color: var(--nooks-text) !important;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.bg-white.rounded-lg.shadow h2 i,
+.bg-white.rounded-lg.shadow.p-6 h2 i {
+  color: var(--nooks-purple) !important;
+}
+
+/* ---------- Tabs (override tab-active/tab-inactive) ---------- */
+.tab-active {
+  color: var(--nooks-purple) !important;
+  border-color: var(--nooks-purple) !important;
+  background: var(--nooks-purple-light) !important;
+  border-radius: 8px 8px 0 0;
+  font-weight: 600 !important;
+}
+.tab-inactive {
+  color: var(--nooks-text-secondary) !important;
+  border-color: transparent !important;
+  border-radius: 8px 8px 0 0;
+}
+.tab-inactive:hover {
+  color: var(--nooks-purple) !important;
+  background: var(--nooks-purple-50) !important;
+}
+
+/* ---------- Buttons — Primary (bg-blue-600, bg-indigo-600) ---------- */
+.bg-blue-600,
+.bg-indigo-600,
+button[class*="bg-blue-600"],
+a[class*="bg-blue-600"],
+button[class*="bg-indigo-600"],
+a[class*="bg-indigo-600"] {
+  background: linear-gradient(135deg, var(--nooks-purple) 0%, var(--nooks-indigo) 100%) !important;
+  border: none !important;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.25) !important;
+  transition: all 0.2s ease !important;
+}
+.bg-blue-600:hover,
+.bg-indigo-600:hover,
+button[class*="bg-blue-600"]:hover,
+a[class*="bg-blue-600"]:hover,
+button[class*="bg-indigo-600"]:hover,
+a[class*="bg-indigo-600"]:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35) !important;
+  transform: translateY(-1px);
+}
+
+/* ---------- Buttons — Secondary (bg-gray-600, bg-gray-200) ---------- */
+.bg-gray-600,
+button[class*="bg-gray-600"],
+a[class*="bg-gray-600"] {
+  background: #FFFFFF !important;
+  color: var(--nooks-text) !important;
+  border: 1.5px solid var(--nooks-border) !important;
+  border-radius: 10px !important;
+  font-weight: 500 !important;
+  box-shadow: var(--nooks-shadow) !important;
+  transition: all 0.2s ease !important;
+}
+.bg-gray-600:hover,
+button[class*="bg-gray-600"]:hover,
+a[class*="bg-gray-600"]:hover {
+  border-color: var(--nooks-purple) !important;
+  color: var(--nooks-purple) !important;
+  background: var(--nooks-purple-50) !important;
+}
+
+a[class*="bg-gray-200"] {
+  background: var(--nooks-purple-light) !important;
+  color: var(--nooks-purple-dark) !important;
+  border-radius: 10px !important;
+  font-weight: 500 !important;
+  border: 1px solid #DDD6FE !important;
+  transition: all 0.2s ease !important;
+}
+a[class*="bg-gray-200"]:hover {
+  background: var(--nooks-purple) !important;
+  color: white !important;
+}
+
+/* ---------- Buttons — Success (bg-green-600) ---------- */
+.bg-green-600,
+a[class*="bg-green-600"] {
+  background: linear-gradient(135deg, #059669 0%, #10B981 100%) !important;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25) !important;
+}
+.bg-green-600:hover,
+a[class*="bg-green-600"]:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35) !important;
+}
+
+/* ---------- Form Inputs ---------- */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+select,
+textarea,
+.border.rounded-md,
+input.border.rounded-md,
+select.border.rounded-md,
+input.w-full.border,
+select.w-full.border {
+  border: 1.5px solid var(--nooks-border) !important;
+  border-radius: 10px !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.875rem !important;
+  transition: all 0.2s ease !important;
+  background: white !important;
+}
+input[type="text"]:focus,
+input[type="number"]:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--nooks-purple) !important;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1) !important;
+  outline: none !important;
+}
+
+/* ---------- Checkboxes ---------- */
+input[type="checkbox"] {
+  accent-color: var(--nooks-purple);
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 4px;
+}
+
+/* ---------- Radio Buttons (Search Mode cards) ---------- */
+label:has(input[type="radio"]) {
+  border-radius: 10px !important;
+  border: 1.5px solid var(--nooks-border) !important;
+  transition: all 0.2s ease !important;
+}
+label:has(input[type="radio"]:checked) {
+  border-color: var(--nooks-purple) !important;
+  background: var(--nooks-purple-50) !important;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.08) !important;
+}
+label:has(input[type="radio"]) .font-medium {
+  color: var(--nooks-text);
+}
+input[type="radio"] {
+  accent-color: var(--nooks-purple);
+}
+
+/* ---------- Add person search link ---------- */
+.text-blue-600:not(.text-sm):not(td *):not(span *) {
+  color: var(--nooks-purple) !important;
+}
+.text-blue-600:hover {
+  color: var(--nooks-purple-dark) !important;
+}
+button[class*="text-blue-600"] {
+  color: var(--nooks-purple) !important;
+  font-weight: 500 !important;
+}
+button[class*="text-blue-600"]:hover {
+  color: var(--nooks-purple-dark) !important;
+}
+
+/* ---------- Stat Cards ---------- */
+.stat-card {
+  background: linear-gradient(135deg, var(--nooks-purple-50) 0%, var(--nooks-purple-light) 100%) !important;
+  border-radius: var(--nooks-radius) !important;
+  border: 1px solid #DDD6FE;
+}
+.stat-card-green {
+  background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%) !important;
+  border-radius: var(--nooks-radius) !important;
+  border: 1px solid #A7F3D0;
+}
+
+/* Summary stat cards on results page */
+.grid.grid-cols-1.md\:grid-cols-4 > .bg-white.rounded-lg.shadow.p-6 {
+  border-top: 3px solid var(--nooks-purple);
+}
+.grid.grid-cols-1.md\:grid-cols-4 > .bg-white.rounded-lg.shadow.p-6 .text-3xl {
+  color: var(--nooks-purple) !important;
+}
+
+/* JS-generated person count cards */
+.grid.grid-cols-1.md\:grid-cols-4 .text-3xl.font-bold.text-blue-600 {
+  color: var(--nooks-purple) !important;
+}
+
+/* ---------- Tables ---------- */
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+thead {
+  background: var(--nooks-purple-50) !important;
+}
+thead th {
+  font-weight: 600 !important;
+  font-size: 0.75rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  color: var(--nooks-purple-dark) !important;
+  padding: 0.75rem 1rem !important;
+  border-bottom: 2px solid #DDD6FE !important;
+}
+tbody tr {
+  transition: background 0.15s ease;
+}
+tbody tr:hover {
+  background: var(--nooks-purple-50) !important;
+}
+tbody td {
+  padding: 0.75rem 1rem !important;
+  font-size: 0.875rem;
+  border-bottom: 1px solid #F3F4F6;
+}
+
+/* ---------- Progress Bar ---------- */
+.bg-blue-600.h-3.rounded-full {
+  background: linear-gradient(90deg, var(--nooks-purple) 0%, var(--nooks-violet) 100%) !important;
+  border-radius: 999px !important;
+}
+.bg-gray-200.rounded-full.h-3 {
+  background: #E5E7EB !important;
+  border-radius: 999px !important;
+  overflow: hidden;
+}
+
+/* ---------- Status Badges ---------- */
+.bg-green-100.text-green-800 {
+  background: #D1FAE5 !important;
+  color: #065F46 !important;
+  font-weight: 600 !important;
+  border-radius: 999px !important;
+}
+.bg-blue-100.text-blue-800 {
+  background: var(--nooks-purple-light) !important;
+  color: var(--nooks-purple-dark) !important;
+  font-weight: 600 !important;
+  border-radius: 999px !important;
+}
+.bg-red-100.text-red-800 {
+  background: #FEE2E2 !important;
+  color: #991B1B !important;
+  font-weight: 600 !important;
+  border-radius: 999px !important;
+}
+
+/* ---------- Job Cards in sidebar ---------- */
+a.block.border.rounded-lg {
+  border-radius: 10px !important;
+  border: 1.5px solid var(--nooks-border) !important;
+  transition: all 0.2s ease !important;
+  padding: 0.875rem !important;
+}
+a.block.border.rounded-lg:hover {
+  border-color: var(--nooks-purple) !important;
+  background: var(--nooks-purple-50) !important;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.08) !important;
+  transform: translateY(-1px);
+}
+
+/* ---------- Toggle switches ---------- */
+.peer-checked\:bg-indigo-600:is(:where(.peer:checked) ~ *) {
+  background-color: var(--nooks-purple) !important;
+}
+
+/* ---------- Drag & Drop area ---------- */
+.border-dashed {
+  border-color: #C4B5FD !important;
+  border-radius: var(--nooks-radius) !important;
+  background: var(--nooks-purple-50);
+  transition: all 0.2s ease;
+}
+.border-dashed:hover {
+  border-color: var(--nooks-purple) !important;
+  background: #EDE9FE;
+}
+
+/* ---------- Info boxes ---------- */
+.bg-blue-50 {
+  background: var(--nooks-purple-50) !important;
+  border-radius: var(--nooks-radius) !important;
+}
+.bg-blue-50 h4,
+.bg-blue-50 .font-medium {
+  color: var(--nooks-purple-dark) !important;
+}
+.bg-blue-50 .text-sm,
+.bg-blue-50 li {
+  color: #5B21B6 !important;
+}
+.border-blue-200 {
+  border-color: #DDD6FE !important;
+}
+
+/* ---------- Error boxes ---------- */
+.bg-red-50 {
+  border-radius: var(--nooks-radius) !important;
+  border: 1px solid #FECACA;
+}
+
+/* ---------- Code blocks ---------- */
+pre {
+  border-radius: 10px !important;
+  font-size: 0.8rem !important;
+  background: #1E1B4B !important;
+  color: #E0E7FF !important;
+  padding: 1rem !important;
+}
+
+/* ---------- Warning/info boxes ---------- */
+.bg-yellow-50 {
+  background: #FFFBEB !important;
+  border-radius: 10px !important;
+  border: 1px solid #FDE68A;
+}
+
+/* ---------- Pagination buttons ---------- */
+#pagination button {
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+}
+#pagination button:not(:disabled):hover {
+  border-color: var(--nooks-purple) !important;
+  color: var(--nooks-purple) !important;
+  background: var(--nooks-purple-50) !important;
+}
+
+/* ---------- Lucide Icons in headers ---------- */
+h2 > i[data-lucide],
+h3 > i[data-lucide] {
+  color: var(--nooks-purple) !important;
+}
+
+/* ---------- Scrollbar ---------- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #C4B5FD; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--nooks-purple); }
+
+/* ---------- Smooth transitions globally ---------- */
+*, *::before, *::after {
+  transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+  transition-timing-function: ease;
+  transition-duration: 0.15s;
+}
+/* Except animations */
+.animate-spin, [class*="transition-all"] {
+  transition-property: all;
+}
+
+/* ---------- Selection color ---------- */
+::selection {
+  background: var(--nooks-purple-light);
+  color: var(--nooks-purple-dark);
+}
