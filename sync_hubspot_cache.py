@@ -16,7 +16,8 @@ import requests
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from config import get_database_url, Config
-from models.database import HubSpotCache, SyncMetadata, db
+from models.database import HubSpotCache, SyncMetadata, Company, HubSpotEnrichment, db
+from services.hubspot_client_cached import HubSpotClientCached
 
 # Set up logging
 logging.basicConfig(
@@ -423,6 +424,69 @@ class HubSpotCacheSync:
             
         return updated_count
     
+    def enrich_unenriched_companies(self):
+        """Check all companies without active HubSpot enrichments against the cache.
+        
+        Called automatically after cache sync so that newly-added cache entries
+        can match previously un-enrichable companies.
+        """
+        logger.info("Checking for un-enriched companies that now match cache...")
+        
+        # Find companies with no active enrichment
+        unenriched = self.session.query(Company)\
+            .outerjoin(HubSpotEnrichment,
+                       (Company.id == HubSpotEnrichment.company_id) &
+                       (HubSpotEnrichment.is_active == True))\
+            .filter(HubSpotEnrichment.id == None)\
+            .all()
+        
+        if not unenriched:
+            logger.info("All companies already have active HubSpot enrichments")
+            return 0
+        
+        logger.info(f"Found {len(unenriched)} companies without active enrichments")
+        
+        hubspot_client = HubSpotClientCached(session=self.session)
+        
+        total_created = 0
+        batch_size = 100
+        
+        for i in range(0, len(unenriched), batch_size):
+            batch = unenriched[i:i + batch_size]
+            
+            batch_data = []
+            for company in batch:
+                batch_data.append({
+                    'id': company.id,
+                    'linkedin_url': company.linkedin_url,
+                    'domain': company.domain,
+                    'website': company.website,
+                    'other_websites': company.other_websites
+                })
+            
+            enrichments = hubspot_client.batch_enrich_companies(batch_data)
+            
+            for company_id, enrichment_data in enrichments.items():
+                if enrichment_data:
+                    company = next(c for c in batch if c.id == company_id)
+                    new_enrichment = HubSpotEnrichment(
+                        company_id=company_id,
+                        job_id=company.job_id,
+                        hubspot_object_id=enrichment_data['hubspot_object_id'],
+                        vertical=enrichment_data.get('vertical'),
+                        lookup_method=enrichment_data.get('lookup_method'),
+                        hubspot_created_date=enrichment_data.get('hubspot_created_date'),
+                        is_active=True
+                    )
+                    self.session.add(new_enrichment)
+                    total_created += 1
+            
+            self.session.commit()
+            logger.info(f"  Batch {i // batch_size + 1}: processed {len(batch)} companies")
+        
+        logger.info(f"✅ Auto-enrichment complete: {total_created} new enrichments created from {len(unenriched)} un-enriched companies")
+        return total_created
+
     def sync(self):
         """Main sync process."""
         last_sync = self.get_last_sync_timestamp()
@@ -469,6 +533,13 @@ class HubSpotCacheSync:
                 logger.info(f"Added/updated {records_added} companies in cache")
             else:
                 logger.info("No new companies found")
+            
+            # Step 4: Auto-enrich companies that now match cache
+            try:
+                new_enrichments = self.enrich_unenriched_companies()
+                logger.info(f"Auto-enrichment: {new_enrichments} new enrichments created")
+            except Exception as e:
+                logger.warning(f"Auto-enrichment failed (non-fatal): {e}")
             
             # Update sync metadata
             self.update_sync_metadata(
