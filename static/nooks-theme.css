@@ -1,126 +1,109 @@
 /* ============================================================
-   Nooks.ai-Inspired Theme Override
-   Loaded AFTER Tailwind — uses targeted selectors to restyle
-   the entire app without changing HTML structure.
+   Nooks.ai-Inspired Theme
+   Clean, minimal, modern SaaS aesthetic.
+   Dark buttons, white surfaces, subtle accents.
    ============================================================ */
 
-/* ---------- Web Font ---------- */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* ---------- CSS Variables ---------- */
 :root {
-  --nooks-purple: #7C3AED;
-  --nooks-purple-dark: #6D28D9;
-  --nooks-purple-light: #EDE9FE;
-  --nooks-purple-50: #F5F3FF;
-  --nooks-violet: #8B5CF6;
-  --nooks-indigo: #6366F1;
-  --nooks-bg: #F8F7FC;
-  --nooks-card: #FFFFFF;
-  --nooks-border: #E5E7EB;
-  --nooks-text: #1F2937;
-  --nooks-text-secondary: #6B7280;
-  --nooks-radius: 12px;
-  --nooks-shadow: 0 1px 3px rgba(124, 58, 237, 0.06), 0 1px 2px rgba(0,0,0,0.04);
-  --nooks-shadow-lg: 0 4px 16px rgba(124, 58, 237, 0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --bg: #FAFAFA;
+  --card: #FFFFFF;
+  --border: #E8E8EC;
+  --border-hover: #D1D1D6;
+  --text: #18181B;
+  --text-secondary: #71717A;
+  --text-muted: #A1A1AA;
+  --accent: #7C3AED;
+  --accent-light: #F5F3FF;
+  --accent-border: #DDD6FE;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
 }
 
-/* ---------- Base ---------- */
+/* === Base === */
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
-  background: var(--nooks-bg) !important;
-  color: var(--nooks-text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+  background: var(--bg) !important;
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* ---------- Typography ---------- */
+/* === Typography === */
 h1, h2, h3, h4 {
-  font-weight: 700 !important;
-  letter-spacing: -0.02em;
-  color: var(--nooks-text);
+  letter-spacing: -0.025em;
+  color: var(--text);
 }
-h1 { font-size: 1.75rem !important; }
 
-/* ---------- Header / Title Area ---------- */
+/* === Header — clean, not a garish gradient === */
 body > div > header,
 body > div > div > header {
-  background: linear-gradient(135deg, var(--nooks-purple) 0%, var(--nooks-indigo) 100%);
-  margin: -2rem -1rem 2rem -1rem;
-  padding: 2rem 1.5rem !important;
-  border-radius: 0 0 var(--nooks-radius) var(--nooks-radius);
+  background: transparent !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1.25rem !important;
+  margin-bottom: 1.5rem !important;
 }
 body > div > header h1,
 body > div > div > header h1 {
-  color: #FFFFFF !important;
+  color: var(--text) !important;
+  font-weight: 700 !important;
+  font-size: 1.5rem !important;
 }
 body > div > header p,
 body > div > div > header p {
-  color: rgba(255,255,255,0.8) !important;
+  color: var(--text-secondary) !important;
 }
 
-/* ---------- Cards (bg-white rounded-lg shadow) ---------- */
+/* === Cards === */
 .bg-white.rounded-lg.shadow,
 .bg-white.rounded-lg.shadow.p-6,
 .bg-white.rounded-lg.shadow.overflow-hidden {
-  background: var(--nooks-card) !important;
-  border-radius: var(--nooks-radius) !important;
-  box-shadow: var(--nooks-shadow) !important;
-  border: 1px solid var(--nooks-border);
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-.bg-white.rounded-lg.shadow:hover,
-.bg-white.rounded-lg.shadow.p-6:hover {
-  box-shadow: var(--nooks-shadow-lg) !important;
-  border-color: #DDD6FE;
+  background: var(--card) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-sm) !important;
+  border: 1px solid var(--border) !important;
 }
 
-/* ---------- Section Headers inside cards ---------- */
-.bg-white.rounded-lg.shadow h2,
-.bg-white.rounded-lg.shadow.p-6 h2 {
-  font-size: 1.05rem !important;
+/* === Section headings in cards === */
+.bg-white.rounded-lg.shadow h2 {
+  font-size: 0.95rem !important;
   font-weight: 600 !important;
-  color: var(--nooks-text) !important;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.bg-white.rounded-lg.shadow h2 i,
-.bg-white.rounded-lg.shadow.p-6 h2 i {
-  color: var(--nooks-purple) !important;
 }
 
-/* ---------- Tabs (override tab-active/tab-inactive) ---------- */
+/* === Tabs === */
 .tab-active {
-  color: var(--nooks-purple) !important;
-  border-color: var(--nooks-purple) !important;
-  background: var(--nooks-purple-light) !important;
-  border-radius: 8px 8px 0 0;
+  color: var(--text) !important;
+  border-color: var(--text) !important;
+  background: transparent !important;
   font-weight: 600 !important;
 }
 .tab-inactive {
-  color: var(--nooks-text-secondary) !important;
+  color: var(--text-muted) !important;
   border-color: transparent !important;
-  border-radius: 8px 8px 0 0;
 }
 .tab-inactive:hover {
-  color: var(--nooks-purple) !important;
-  background: var(--nooks-purple-50) !important;
+  color: var(--text-secondary) !important;
+  background: transparent !important;
 }
 
-/* ---------- Buttons — Primary (bg-blue-600, bg-indigo-600) ---------- */
+/* === Primary Buttons (bg-blue-600, bg-indigo-600) — solid dark === */
 .bg-blue-600,
 .bg-indigo-600,
 button[class*="bg-blue-600"],
 a[class*="bg-blue-600"],
 button[class*="bg-indigo-600"],
 a[class*="bg-indigo-600"] {
-  background: linear-gradient(135deg, var(--nooks-purple) 0%, var(--nooks-indigo) 100%) !important;
+  background: var(--text) !important;
   border: none !important;
-  border-radius: 10px !important;
-  font-weight: 600 !important;
-  letter-spacing: -0.01em;
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.25) !important;
-  transition: all 0.2s ease !important;
+  border-radius: var(--radius) !important;
+  font-weight: 500 !important;
+  box-shadow: var(--shadow-sm) !important;
+  transition: opacity 0.15s ease !important;
 }
 .bg-blue-600:hover,
 .bg-indigo-600:hover,
@@ -128,321 +111,220 @@ button[class*="bg-blue-600"]:hover,
 a[class*="bg-blue-600"]:hover,
 button[class*="bg-indigo-600"]:hover,
 a[class*="bg-indigo-600"]:hover {
-  filter: brightness(1.08);
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35) !important;
-  transform: translateY(-1px);
+  opacity: 0.85;
+  transform: none !important;
+  filter: none !important;
 }
 
-/* ---------- Buttons — Secondary (bg-gray-600, bg-gray-200) ---------- */
+/* === Secondary Buttons (bg-gray-600) — outlined === */
 .bg-gray-600,
 button[class*="bg-gray-600"],
 a[class*="bg-gray-600"] {
-  background: #FFFFFF !important;
-  color: var(--nooks-text) !important;
-  border: 1.5px solid var(--nooks-border) !important;
-  border-radius: 10px !important;
+  background: var(--card) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
   font-weight: 500 !important;
-  box-shadow: var(--nooks-shadow) !important;
-  transition: all 0.2s ease !important;
+  box-shadow: var(--shadow-sm) !important;
 }
 .bg-gray-600:hover,
 button[class*="bg-gray-600"]:hover,
 a[class*="bg-gray-600"]:hover {
-  border-color: var(--nooks-purple) !important;
-  color: var(--nooks-purple) !important;
-  background: var(--nooks-purple-50) !important;
+  background: var(--bg) !important;
+  border-color: var(--border-hover) !important;
+  color: var(--text) !important;
 }
 
+/* Back button */
 a[class*="bg-gray-200"] {
-  background: var(--nooks-purple-light) !important;
-  color: var(--nooks-purple-dark) !important;
-  border-radius: 10px !important;
+  background: var(--bg) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
   font-weight: 500 !important;
-  border: 1px solid #DDD6FE !important;
-  transition: all 0.2s ease !important;
 }
 a[class*="bg-gray-200"]:hover {
-  background: var(--nooks-purple) !important;
-  color: white !important;
+  background: var(--border) !important;
+  color: var(--text) !important;
 }
 
-/* ---------- Buttons — Success (bg-green-600) ---------- */
+/* === Success Buttons (bg-green-600) === */
 .bg-green-600,
 a[class*="bg-green-600"] {
-  background: linear-gradient(135deg, #059669 0%, #10B981 100%) !important;
-  border-radius: 10px !important;
-  font-weight: 600 !important;
-  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25) !important;
+  background: #18181B !important;
+  border-radius: var(--radius) !important;
+  font-weight: 500 !important;
+  box-shadow: var(--shadow-sm) !important;
 }
 .bg-green-600:hover,
 a[class*="bg-green-600"]:hover {
-  filter: brightness(1.08);
-  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35) !important;
+  opacity: 0.85;
 }
 
-/* ---------- Form Inputs ---------- */
+/* === Form Inputs === */
 input[type="text"],
 input[type="number"],
 input[type="email"],
 input[type="password"],
 input[type="search"],
 select,
-textarea,
-.border.rounded-md,
-input.border.rounded-md,
-select.border.rounded-md,
-input.w-full.border,
-select.w-full.border {
-  border: 1.5px solid var(--nooks-border) !important;
-  border-radius: 10px !important;
-  padding: 0.5rem 0.75rem !important;
+textarea {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
   font-size: 0.875rem !important;
-  transition: all 0.2s ease !important;
   background: white !important;
+  color: var(--text) !important;
+  transition: border-color 0.15s ease !important;
 }
 input[type="text"]:focus,
 input[type="number"]:focus,
 select:focus,
 textarea:focus {
-  border-color: var(--nooks-purple) !important;
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.08) !important;
   outline: none !important;
 }
 
-/* ---------- Checkboxes ---------- */
-input[type="checkbox"] {
-  accent-color: var(--nooks-purple);
-  width: 1.1rem;
-  height: 1.1rem;
-  border-radius: 4px;
+/* === Checkboxes & Radios === */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
 }
 
-/* ---------- Radio Buttons (Search Mode cards) ---------- */
+/* === Radio card selections === */
 label:has(input[type="radio"]) {
-  border-radius: 10px !important;
-  border: 1.5px solid var(--nooks-border) !important;
-  transition: all 0.2s ease !important;
+  border-radius: var(--radius) !important;
+  border: 1px solid var(--border) !important;
+  transition: border-color 0.15s ease, background 0.15s ease !important;
 }
 label:has(input[type="radio"]:checked) {
-  border-color: var(--nooks-purple) !important;
-  background: var(--nooks-purple-50) !important;
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.08) !important;
-}
-label:has(input[type="radio"]) .font-medium {
-  color: var(--nooks-text);
-}
-input[type="radio"] {
-  accent-color: var(--nooks-purple);
+  border-color: var(--accent) !important;
+  background: var(--accent-light) !important;
 }
 
-/* ---------- Add person search link ---------- */
-.text-blue-600:not(.text-sm):not(td *):not(span *) {
-  color: var(--nooks-purple) !important;
+/* === Links styled as buttons === */
+button[class*="text-blue-600"],
+.text-blue-600 {
+  color: var(--accent) !important;
 }
+button[class*="text-blue-600"]:hover,
 .text-blue-600:hover {
-  color: var(--nooks-purple-dark) !important;
-}
-button[class*="text-blue-600"] {
-  color: var(--nooks-purple) !important;
-  font-weight: 500 !important;
-}
-button[class*="text-blue-600"]:hover {
-  color: var(--nooks-purple-dark) !important;
+  color: #6D28D9 !important;
 }
 
-/* ---------- Stat Cards ---------- */
+/* === Stat Cards === */
 .stat-card {
-  background: linear-gradient(135deg, var(--nooks-purple-50) 0%, var(--nooks-purple-light) 100%) !important;
-  border-radius: var(--nooks-radius) !important;
-  border: 1px solid #DDD6FE;
+  background: var(--accent-light) !important;
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--accent-border) !important;
 }
 .stat-card-green {
-  background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%) !important;
-  border-radius: var(--nooks-radius) !important;
-  border: 1px solid #A7F3D0;
+  background: #F0FDF4 !important;
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid #BBF7D0 !important;
 }
 
-/* Summary stat cards on results page */
+/* Results page stat cards */
 .grid.grid-cols-1.md\:grid-cols-4 > .bg-white.rounded-lg.shadow.p-6 {
-  border-top: 3px solid var(--nooks-purple);
-}
-.grid.grid-cols-1.md\:grid-cols-4 > .bg-white.rounded-lg.shadow.p-6 .text-3xl {
-  color: var(--nooks-purple) !important;
+  border-top: 2px solid var(--accent);
 }
 
-/* JS-generated person count cards */
-.grid.grid-cols-1.md\:grid-cols-4 .text-3xl.font-bold.text-blue-600 {
-  color: var(--nooks-purple) !important;
-}
-
-/* ---------- Tables ---------- */
-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-}
+/* === Tables === */
 thead {
-  background: var(--nooks-purple-50) !important;
+  background: var(--bg) !important;
 }
 thead th {
   font-weight: 600 !important;
   font-size: 0.75rem !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.05em !important;
-  color: var(--nooks-purple-dark) !important;
-  padding: 0.75rem 1rem !important;
-  border-bottom: 2px solid #DDD6FE !important;
-}
-tbody tr {
-  transition: background 0.15s ease;
+  letter-spacing: 0.04em !important;
+  color: var(--text-secondary) !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 tbody tr:hover {
-  background: var(--nooks-purple-50) !important;
-}
-tbody td {
-  padding: 0.75rem 1rem !important;
-  font-size: 0.875rem;
-  border-bottom: 1px solid #F3F4F6;
+  background: var(--bg) !important;
 }
 
-/* ---------- Progress Bar ---------- */
+/* === Progress Bar === */
 .bg-blue-600.h-3.rounded-full {
-  background: linear-gradient(90deg, var(--nooks-purple) 0%, var(--nooks-violet) 100%) !important;
-  border-radius: 999px !important;
-}
-.bg-gray-200.rounded-full.h-3 {
-  background: #E5E7EB !important;
-  border-radius: 999px !important;
-  overflow: hidden;
+  background: var(--accent) !important;
 }
 
-/* ---------- Status Badges ---------- */
-.bg-green-100.text-green-800 {
-  background: #D1FAE5 !important;
-  color: #065F46 !important;
-  font-weight: 600 !important;
+/* === Status Badges === */
+.bg-green-100.text-green-800,
+.bg-blue-100.text-blue-800,
+.bg-red-100.text-red-800,
+.bg-gray-100.text-gray-800 {
+  font-weight: 500 !important;
   border-radius: 999px !important;
-}
-.bg-blue-100.text-blue-800 {
-  background: var(--nooks-purple-light) !important;
-  color: var(--nooks-purple-dark) !important;
-  font-weight: 600 !important;
-  border-radius: 999px !important;
-}
-.bg-red-100.text-red-800 {
-  background: #FEE2E2 !important;
-  color: #991B1B !important;
-  font-weight: 600 !important;
-  border-radius: 999px !important;
+  font-size: 0.75rem !important;
 }
 
-/* ---------- Job Cards in sidebar ---------- */
+/* === Job Cards in sidebar === */
 a.block.border.rounded-lg {
-  border-radius: 10px !important;
-  border: 1.5px solid var(--nooks-border) !important;
-  transition: all 0.2s ease !important;
-  padding: 0.875rem !important;
+  border-radius: var(--radius) !important;
+  border: 1px solid var(--border) !important;
+  transition: border-color 0.15s ease !important;
 }
 a.block.border.rounded-lg:hover {
-  border-color: var(--nooks-purple) !important;
-  background: var(--nooks-purple-50) !important;
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.08) !important;
-  transform: translateY(-1px);
+  border-color: var(--border-hover) !important;
+  background: var(--bg) !important;
 }
 
-/* ---------- Toggle switches ---------- */
+/* === Toggle switch === */
 .peer-checked\:bg-indigo-600:is(:where(.peer:checked) ~ *) {
-  background-color: var(--nooks-purple) !important;
+  background-color: var(--accent) !important;
 }
 
-/* ---------- Drag & Drop area ---------- */
+/* === Drag & Drop === */
 .border-dashed {
-  border-color: #C4B5FD !important;
-  border-radius: var(--nooks-radius) !important;
-  background: var(--nooks-purple-50);
-  transition: all 0.2s ease;
+  border-color: var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  background: var(--bg) !important;
 }
 .border-dashed:hover {
-  border-color: var(--nooks-purple) !important;
-  background: #EDE9FE;
+  border-color: var(--accent) !important;
+  background: var(--accent-light) !important;
 }
 
-/* ---------- Info boxes ---------- */
+/* === Info boxes === */
 .bg-blue-50 {
-  background: var(--nooks-purple-50) !important;
-  border-radius: var(--nooks-radius) !important;
-}
-.bg-blue-50 h4,
-.bg-blue-50 .font-medium {
-  color: var(--nooks-purple-dark) !important;
-}
-.bg-blue-50 .text-sm,
-.bg-blue-50 li {
-  color: #5B21B6 !important;
-}
-.border-blue-200 {
-  border-color: #DDD6FE !important;
+  background: var(--accent-light) !important;
+  border-radius: var(--radius) !important;
 }
 
-/* ---------- Error boxes ---------- */
-.bg-red-50 {
-  border-radius: var(--nooks-radius) !important;
-  border: 1px solid #FECACA;
-}
-
-/* ---------- Code blocks ---------- */
+/* === Code blocks === */
 pre {
-  border-radius: 10px !important;
+  border-radius: var(--radius) !important;
   font-size: 0.8rem !important;
-  background: #1E1B4B !important;
-  color: #E0E7FF !important;
-  padding: 1rem !important;
+  background: #1C1917 !important;
+  color: #E7E5E4 !important;
 }
 
-/* ---------- Warning/info boxes ---------- */
-.bg-yellow-50 {
-  background: #FFFBEB !important;
-  border-radius: 10px !important;
-  border: 1px solid #FDE68A;
-}
-
-/* ---------- Pagination buttons ---------- */
+/* === Pagination === */
 #pagination button {
-  border-radius: 8px !important;
+  border-radius: var(--radius) !important;
   font-weight: 500 !important;
-  transition: all 0.2s ease !important;
 }
 #pagination button:not(:disabled):hover {
-  border-color: var(--nooks-purple) !important;
-  color: var(--nooks-purple) !important;
-  background: var(--nooks-purple-50) !important;
+  border-color: var(--border-hover) !important;
+  background: var(--bg) !important;
 }
 
-/* ---------- Lucide Icons in headers ---------- */
+/* === Icons in headings — subtle accent === */
 h2 > i[data-lucide],
 h3 > i[data-lucide] {
-  color: var(--nooks-purple) !important;
+  color: var(--text-secondary) !important;
 }
 
-/* ---------- Scrollbar ---------- */
+/* === Scrollbar === */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #C4B5FD; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--nooks-purple); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-/* ---------- Smooth transitions globally ---------- */
-*, *::before, *::after {
-  transition-property: color, background-color, border-color, box-shadow, transform, opacity;
-  transition-timing-function: ease;
-  transition-duration: 0.15s;
-}
-/* Except animations */
-.animate-spin, [class*="transition-all"] {
-  transition-property: all;
-}
-
-/* ---------- Selection color ---------- */
+/* === Selection === */
 ::selection {
-  background: var(--nooks-purple-light);
-  color: var(--nooks-purple-dark);
+  background: var(--accent-light);
+  color: var(--text);
 }
