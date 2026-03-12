@@ -46,6 +46,12 @@ try:
                 conn.execute(text("ALTER TABLE person_counts ADD COLUMN IF NOT EXISTS csv_company_id INTEGER REFERENCES csv_companies(id)"))
                 conn.execute(text("ALTER TABLE hubspot_enrichments ADD COLUMN IF NOT EXISTS csv_company_id INTEGER REFERENCES csv_companies(id)"))
                 
+                # Add data_source tracking for person counts (new vs existing reuse)
+                conn.execute(text("ALTER TABLE person_counts ADD COLUMN IF NOT EXISTS data_source VARCHAR(20) DEFAULT 'api_call'"))
+                
+                # Make hubspot_object_id nullable on csv_companies for domain-only uploads
+                conn.execute(text("ALTER TABLE csv_companies ALTER COLUMN hubspot_object_id DROP NOT NULL"))
+                
                 conn.commit()
             except Exception as e:
                 print(f"Migration note: {e}")
@@ -949,6 +955,8 @@ def validate_csv():
         if not file.filename.lower().endswith('.csv'):
             return jsonify({'error': 'File must be a CSV'}), 400
         
+        domain_only = request.form.get('domain_only', 'false').lower() == 'true'
+        
         # Read CSV content
         csv_content = file.read().decode('utf-8')
         file.seek(0)  # Reset file pointer
@@ -961,10 +969,7 @@ def validate_csv():
         if not headers:
             return jsonify({'error': 'CSV file is empty or has no headers'}), 400
         
-        if len(headers) > 2:
-            return jsonify({'error': f'CSV has {len(headers)} columns, maximum 2 allowed'}), 400
-        
-        # Auto-detect required columns
+        # Auto-detect columns
         hubspot_id_col = None
         domain_col = None
         
@@ -972,14 +977,25 @@ def validate_csv():
             header_lower = header.lower().strip()
             if 'hubspot' in header_lower and 'id' in header_lower:
                 hubspot_id_col = header
-            elif 'domain' in header_lower:
+            if 'domain' in header_lower or 'website' in header_lower or 'url' in header_lower:
                 domain_col = header
         
-        if not hubspot_id_col or not domain_col:
-            return jsonify({
-                'error': 'Could not detect required columns. CSV must have columns for HubSpot ID and domain',
-                'detected_headers': headers
-            }), 400
+        # If no domain column detected, try first column for domain-only mode
+        if domain_only and not domain_col and len(headers) == 1:
+            domain_col = headers[0]
+        
+        if domain_only:
+            if not domain_col:
+                return jsonify({
+                    'error': 'Could not detect a domain column. CSV must have a column for domain/website.',
+                    'detected_headers': list(headers)
+                }), 400
+        else:
+            if not hubspot_id_col or not domain_col:
+                return jsonify({
+                    'error': 'Could not detect required columns. CSV must have columns for HubSpot ID and domain.',
+                    'detected_headers': list(headers)
+                }), 400
         
         # Validate rows
         rows = []
@@ -987,21 +1003,22 @@ def validate_csv():
         valid_count = 0
         
         for row_num, row in enumerate(csv_reader, start=2):  # Start at 2 for header
-            hubspot_id = row.get(hubspot_id_col, '').strip()
             domain = row.get(domain_col, '').strip()
+            hubspot_id = row.get(hubspot_id_col, '').strip() if hubspot_id_col else ''
             
             row_errors = []
+            cache_record = None
             
-            # Validate HubSpot ID
-            if not hubspot_id:
-                row_errors.append('HubSpot ID is empty')
-            elif not hubspot_id.isdigit():
-                row_errors.append('HubSpot ID must be numeric')
-            else:
-                # Check if HubSpot ID exists in cache
-                cache_record = HubSpotCache.query.filter_by(hubspot_object_id=hubspot_id).first()
-                if not cache_record:
-                    row_errors.append(f'HubSpot ID {hubspot_id} not found in cache')
+            # Validate HubSpot ID (only in standard mode)
+            if not domain_only:
+                if not hubspot_id:
+                    row_errors.append('HubSpot ID is empty')
+                elif not hubspot_id.isdigit():
+                    row_errors.append('HubSpot ID must be numeric')
+                else:
+                    cache_record = HubSpotCache.query.filter_by(hubspot_object_id=hubspot_id).first()
+                    if not cache_record:
+                        row_errors.append(f'HubSpot ID {hubspot_id} not found in cache')
             
             # Validate domain
             if not domain:
@@ -1014,27 +1031,33 @@ def validate_csv():
                 except Exception:
                     row_errors.append('Domain processing failed')
             
+            # In domain-only mode, try to find company name from HubSpot cache by domain
+            if domain_only and not row_errors:
+                cache_record = HubSpotCache.query.filter_by(domain=registrable_root_domain(domain)).first()
+            
             if row_errors:
                 errors.append({'row': row_num, 'errors': row_errors})
             else:
                 valid_count += 1
                 rows.append({
-                    'hubspot_id': hubspot_id,
+                    'hubspot_id': hubspot_id or None,
                     'domain': domain,
                     'company_name': cache_record.company_name if cache_record else None
                 })
         
+        detected_columns = {'domain': domain_col}
+        if not domain_only:
+            detected_columns['hubspot_id'] = hubspot_id_col
+        
         return jsonify({
-            'valid': len(errors) == 0,
+            'valid': valid_count > 0,
+            'domain_only': domain_only,
             'total_rows': len(rows) + len(errors),
             'valid_rows': valid_count,
             'invalid_rows': len(errors),
-            'errors': errors[:10],  # Limit to first 10 errors for display
-            'sample_data': rows[:5],  # Show first 5 valid rows as preview
-            'detected_columns': {
-                'hubspot_id': hubspot_id_col,
-                'domain': domain_col
-            }
+            'errors': errors[:10],
+            'sample_data': rows[:5],
+            'detected_columns': detected_columns
         })
         
     except Exception as e:
@@ -1049,6 +1072,7 @@ def create_csv_upload_job():
         # Get form data
         job_name = request.form.get('job_name', f"CSV Upload {datetime.now(UTC).strftime('%Y-%m-%d %H:%M')}")
         person_filters = json.loads(request.form.get('person_filters', '[]'))
+        domain_only = request.form.get('domain_only', 'false').lower() == 'true'
         
         if 'file' not in request.files:
             return jsonify({'error': 'No CSV file provided'}), 400
@@ -1069,11 +1093,19 @@ def create_csv_upload_job():
             header_lower = header.lower().strip()
             if 'hubspot' in header_lower and 'id' in header_lower:
                 hubspot_id_col = header
-            elif 'domain' in header_lower:
+            if 'domain' in header_lower or 'website' in header_lower or 'url' in header_lower:
                 domain_col = header
         
-        if not hubspot_id_col or not domain_col:
-            return jsonify({'error': 'Required columns not found'}), 400
+        # Fallback for single-column domain-only CSVs
+        if domain_only and not domain_col and len(headers) == 1:
+            domain_col = headers[0]
+        
+        if domain_only:
+            if not domain_col:
+                return jsonify({'error': 'Domain column not found'}), 400
+        else:
+            if not hubspot_id_col or not domain_col:
+                return jsonify({'error': 'Required columns not found (need HubSpot ID and domain)'}), 400
         
         # Create job
         job = Job(
@@ -1090,21 +1122,30 @@ def create_csv_upload_job():
         # Process CSV rows and create csv_companies
         csv_companies_created = 0
         for row in csv_reader:
-            hubspot_id = row.get(hubspot_id_col, '').strip()
             domain = row.get(domain_col, '').strip()
+            hubspot_id = row.get(hubspot_id_col, '').strip() if hubspot_id_col else ''
             
-            if hubspot_id and domain:
-                # Get company name from cache
+            if not domain:
+                continue
+            
+            normalized_domain = registrable_root_domain(domain) or domain
+            cache_record = None
+            
+            if hubspot_id:
+                # Standard mode: look up by HubSpot ID
                 cache_record = HubSpotCache.query.filter_by(hubspot_object_id=hubspot_id).first()
-                
-                csv_company = CsvCompany(
-                    job_id=job.id,
-                    hubspot_object_id=hubspot_id,
-                    domain=registrable_root_domain(domain) or domain,
-                    company_name=cache_record.company_name if cache_record else None
-                )
-                db.session.add(csv_company)
-                csv_companies_created += 1
+            else:
+                # Domain-only mode: look up by domain
+                cache_record = HubSpotCache.query.filter_by(domain=normalized_domain).first()
+            
+            csv_company = CsvCompany(
+                job_id=job.id,
+                hubspot_object_id=hubspot_id or (cache_record.hubspot_object_id if cache_record else None),
+                domain=normalized_domain,
+                company_name=cache_record.company_name if cache_record else None
+            )
+            db.session.add(csv_company)
+            csv_companies_created += 1
         
         job.total_companies = csv_companies_created
         db.session.commit()
@@ -1137,31 +1178,41 @@ def export_csv_job(job_id):
     output = io.StringIO()
     writer = csv.writer(output)
     
-    # Write headers
+    # Build headers: company info + per-persona count & source + vertical
     headers = ['Company Name', 'HubSpot ID', 'Domain']
-    for pf in job.person_filters:
-        headers.append(pf['name'])
+    person_filter_names = []
+    for pf in (job.person_filters or []):
+        pf_name = pf.get('name', 'Unnamed')
+        person_filter_names.append(pf_name)
+        headers.append(f'{pf_name} (Count)')
+        headers.append(f'{pf_name} (Source)')
+        headers.append(f'{pf_name} (Status)')
     headers.append('Vertical')
     writer.writerow(headers)
     
     # Write data rows
-    for csv_company in job.csv_companies:
+    csv_companies = CsvCompany.query.filter_by(job_id=job.id).all()
+    for csv_company in csv_companies:
         row = [
             csv_company.company_name or csv_company.domain,
-            csv_company.hubspot_object_id,
+            csv_company.hubspot_object_id or '',
             csv_company.domain
         ]
         
         # Add person counts for each filter
-        for pf in job.person_filters:
+        for pf_name in person_filter_names:
             pc = csv_company.person_counts.filter_by(
-                query_name=pf['name'], 
+                query_name=pf_name, 
                 is_active=True
             ).first()
-            if pc and pc.status == 'ok':
-                row.append(pc.total_count)
+            if pc:
+                row.append(pc.total_count if pc.status == 'ok' else '')
+                row.append('Existing' if pc.data_source == 'existing_reuse' else 'New')
+                row.append(pc.status)
             else:
                 row.append('')
+                row.append('')
+                row.append('pending')
         
         # Add vertical from enrichment
         enrichment = csv_company.hubspot_enrichments.filter_by(is_active=True).first()

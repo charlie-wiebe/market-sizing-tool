@@ -252,7 +252,19 @@
                         </h2>
                         
                         <div class="space-y-4">
-                            <p class="text-sm text-gray-600">Upload a CSV file with HubSpot IDs and domains to search for personas.</p>
+                            <p class="text-sm text-gray-600">Upload a CSV file with company domains to search for personas.</p>
+                            
+                            <!-- Domain-only toggle -->
+                            <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="csv_domain_only" class="sr-only peer" onchange="toggleCsvMode()">
+                                    <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                                </label>
+                                <div>
+                                    <span class="text-sm font-medium text-gray-700">Domain-only mode</span>
+                                    <p class="text-xs text-gray-500" id="csv_mode_description">Currently expecting: HubSpot ID + Domain columns</p>
+                                </div>
+                            </div>
                             
                             <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                                 <input type="file" id="csv_file_input" accept=".csv" class="hidden">
@@ -263,19 +275,34 @@
                                 </button>
                             </div>
                             
-                            <div class="bg-blue-50 p-4 rounded-lg">
+                            <div class="bg-blue-50 p-4 rounded-lg" id="csv_format_info">
                                 <h4 class="font-medium text-blue-900 mb-2">CSV Format Requirements:</h4>
-                                <ul class="text-sm text-blue-800 space-y-1">
-                                    <li>• Maximum 2 columns</li>
-                                    <li>• Required: HubSpot ID and Domain columns</li>
-                                    <li>• Headers will be auto-detected</li>
-                                </ul>
-                                <div class="mt-3 bg-white p-3 rounded border border-blue-200">
-                                    <code class="text-xs">
-                                        hubspot_id,domain<br>
-                                        8295,salesforce.com<br>
-                                        8652,ur.com
-                                    </code>
+                                <div id="csv_format_standard">
+                                    <ul class="text-sm text-blue-800 space-y-1">
+                                        <li>- Required: HubSpot ID and Domain columns</li>
+                                        <li>- Headers will be auto-detected</li>
+                                    </ul>
+                                    <div class="mt-3 bg-white p-3 rounded border border-blue-200">
+                                        <code class="text-xs">
+                                            hubspot_id,domain<br>
+                                            8295,salesforce.com<br>
+                                            8652,ur.com
+                                        </code>
+                                    </div>
+                                </div>
+                                <div id="csv_format_domain_only" class="hidden">
+                                    <ul class="text-sm text-blue-800 space-y-1">
+                                        <li>- Required: Domain column (single column OK)</li>
+                                        <li>- Headers will be auto-detected</li>
+                                        <li>- HubSpot IDs resolved automatically from cache if available</li>
+                                    </ul>
+                                    <div class="mt-3 bg-white p-3 rounded border border-blue-200">
+                                        <code class="text-xs">
+                                            domain<br>
+                                            salesforce.com<br>
+                                            hubspot.com
+                                        </code>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -973,6 +1000,55 @@
 
         // ========== CSV Upload Functions ==========
         
+        function toggleCsvMode() {
+            const domainOnly = document.getElementById('csv_domain_only').checked;
+            const desc = document.getElementById('csv_mode_description');
+            const fmtStandard = document.getElementById('csv_format_standard');
+            const fmtDomainOnly = document.getElementById('csv_format_domain_only');
+            
+            if (domainOnly) {
+                desc.textContent = 'Currently expecting: Domain column only';
+                fmtStandard.classList.add('hidden');
+                fmtDomainOnly.classList.remove('hidden');
+            } else {
+                desc.textContent = 'Currently expecting: HubSpot ID + Domain columns';
+                fmtStandard.classList.remove('hidden');
+                fmtDomainOnly.classList.add('hidden');
+            }
+            
+            // Re-validate if a file is already selected
+            if (csvFile) {
+                revalidateCsvFile();
+            }
+        }
+        
+        function revalidateCsvFile() {
+            csvValidationData = null;
+            document.getElementById('csv_upload_btn').disabled = true;
+            
+            const domainOnly = document.getElementById('csv_domain_only').checked;
+            const formData = new FormData();
+            formData.append('file', csvFile);
+            formData.append('domain_only', domainOnly.toString());
+            
+            const resultsDiv = document.getElementById('csv_validation_results');
+            resultsDiv.innerHTML = '<div class="text-sm text-gray-600">Re-validating CSV file...</div>';
+            resultsDiv.classList.remove('hidden');
+            
+            fetch('/api/csv/validate', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                csvValidationData = data;
+                displayCsvValidation(data);
+            })
+            .catch(error => {
+                resultsDiv.innerHTML = `<div class="p-4 bg-red-50 text-red-800 rounded-lg">${error.message || 'Validation failed'}</div>`;
+            });
+        }
+        
         function handleCsvFileSelect(e) {
             csvFile = e.target.files[0];
             if (!csvFile) return;
@@ -981,9 +1057,12 @@
             csvValidationData = null;
             document.getElementById('csv_upload_btn').disabled = true;
             
+            const domainOnly = document.getElementById('csv_domain_only').checked;
+            
             // Validate CSV file
             const formData = new FormData();
             formData.append('file', csvFile);
+            formData.append('domain_only', domainOnly.toString());
             
             const resultsDiv = document.getElementById('csv_validation_results');
             resultsDiv.innerHTML = '<div class="text-sm text-gray-600">Validating CSV file...</div>';
@@ -1025,13 +1104,15 @@
             
             // Detected columns
             if (data.detected_columns) {
-                html += `
-                    <div class="p-3 bg-blue-50 rounded-lg text-sm">
-                        <div class="font-medium mb-1">Detected Columns:</div>
-                        <div>HubSpot ID: "${data.detected_columns.hubspot_id}"</div>
-                        <div>Domain: "${data.detected_columns.domain}"</div>
-                    </div>
-                `;
+                html += `<div class="p-3 bg-blue-50 rounded-lg text-sm"><div class="font-medium mb-1">Detected Columns:</div>`;
+                if (data.detected_columns.hubspot_id) {
+                    html += `<div>HubSpot ID: "${data.detected_columns.hubspot_id}"</div>`;
+                }
+                html += `<div>Domain: "${data.detected_columns.domain}"</div>`;
+                if (data.domain_only) {
+                    html += `<div class="text-blue-600 mt-1">Mode: Domain-only</div>`;
+                }
+                html += `</div>`;
             }
             
             // Sample data preview
@@ -1042,7 +1123,8 @@
                         <div class="text-xs space-y-1">
                 `;
                 data.sample_data.slice(0, 3).forEach(row => {
-                    html += `<div>${row.hubspot_id} - ${row.domain} ${row.company_name ? `(${row.company_name})` : ''}</div>`;
+                    const hsId = row.hubspot_id ? `${row.hubspot_id} - ` : '';
+                    html += `<div>${hsId}${row.domain} ${row.company_name ? `(${row.company_name})` : ''}</div>`;
                 });
                 html += '</div></div>';
             }
@@ -1258,10 +1340,13 @@
             const jobName = document.getElementById('csv_job_name').value || 
                           `CSV Upload ${new Date().toLocaleString()}`;
             
+            const domainOnly = document.getElementById('csv_domain_only').checked;
+            
             const formData = new FormData();
             formData.append('file', csvFile);
             formData.append('job_name', jobName);
             formData.append('person_filters', JSON.stringify(personFilters));
+            formData.append('domain_only', domainOnly.toString());
             
             const uploadBtn = document.getElementById('csv_upload_btn');
             const statusDiv = document.getElementById('csv_upload_status');

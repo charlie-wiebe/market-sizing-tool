@@ -217,6 +217,7 @@ class PersonCount(db.Model):
     status = db.Column(db.String(20), default='ok')  # ok, error
     error_code = db.Column(db.String(50))  # INVALID_FILTERS, NO_RESULTS, etc.
     is_active = db.Column(db.Boolean, default=True, index=True)  # Active record tracking
+    data_source = db.Column(db.String(20), default='api_call')  # 'api_call' or 'existing_reuse'
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     
     def to_dict(self):
@@ -229,6 +230,7 @@ class PersonCount(db.Model):
             'total_count': self.total_count,
             'status': self.status,
             'error_code': self.error_code,
+            'data_source': self.data_source,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
@@ -313,7 +315,7 @@ class CsvCompany(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     job_id = db.Column(db.Integer, db.ForeignKey('jobs.id'), nullable=False)
-    hubspot_object_id = db.Column(db.String(100), nullable=False, index=True)
+    hubspot_object_id = db.Column(db.String(100), nullable=True, index=True)  # Nullable for domain-only uploads
     domain = db.Column(db.String(255), nullable=False, index=True)
     company_name = db.Column(db.String(500))  # From HubSpot cache
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))

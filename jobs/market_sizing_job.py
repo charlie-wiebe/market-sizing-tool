@@ -841,8 +841,9 @@ class MarketSizingJob:
                 person_credits = self._process_csv_person_counts(job, csv_company)
                 credits_used += person_credits
             
-            # Create HubSpot enrichment from cache data
-            self._create_csv_hubspot_enrichment(job, csv_company)
+            # Create HubSpot enrichment from cache data (only if hubspot_object_id present)
+            if csv_company.hubspot_object_id:
+                self._create_csv_hubspot_enrichment(job, csv_company)
             
             companies_processed += 1
             
@@ -886,7 +887,8 @@ class MarketSizingJob:
                         total_count=existing_count.total_count,
                         status=existing_count.status,
                         error_code=existing_count.error_code,
-                        is_active=True
+                        is_active=True,
+                        data_source='existing_reuse'
                     )
                     db.session.add(person_count)
                     person_counts_skipped += 1
@@ -906,7 +908,8 @@ class MarketSizingJob:
                     total_count=result.get("total_count", 0),
                     status=result.get("status", "ok"),
                     error_code=result.get("error_code"),
-                    is_active=True
+                    is_active=True,
+                    data_source='api_call'
                 )
                 db.session.add(person_count)
         
