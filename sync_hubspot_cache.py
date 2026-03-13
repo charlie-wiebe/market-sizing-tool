@@ -452,23 +452,24 @@ class HubSpotCacheSync:
         
         total_created = 0
         batch_size = 100
-        batch_num = 0
+        total_batches = (unenriched_count + batch_size - 1) // batch_size
         
-        # Process in chunks — re-query each batch to keep memory flat
-        while True:
+        # Process in chunks with offset pagination (bounded loop)
+        for batch_num in range(total_batches):
+            offset = batch_num * batch_size
+            
             batch = self.session.query(Company)\
                 .outerjoin(HubSpotEnrichment,
                            (Company.id == HubSpotEnrichment.company_id) &
                            (HubSpotEnrichment.is_active == True))\
                 .filter(HubSpotEnrichment.id == None)\
                 .order_by(Company.id)\
+                .offset(offset)\
                 .limit(batch_size)\
                 .all()
             
             if not batch:
                 break
-            
-            batch_num += 1
             
             batch_data = []
             for company in batch:
@@ -504,7 +505,7 @@ class HubSpotCacheSync:
             self.session.commit()
             self.session.expire_all()
             
-            logger.info(f"  Batch {batch_num}: {batch_created} enrichments from {len(batch)} companies ({total_created} total)")
+            logger.info(f"  Batch {batch_num + 1}/{total_batches}: {batch_created} enrichments from {len(batch)} companies ({total_created} total)")
         
         logger.info(f"✅ Auto-enrichment complete: {total_created} new enrichments created from {unenriched_count} un-enriched companies")
         return total_created
