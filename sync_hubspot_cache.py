@@ -121,7 +121,7 @@ class HubSpotCacheSync:
             # Filter by archivedAt timestamp
             for company in data.get("results", []):
                 if last_sync_timestamp:
-                    archived_at = company.get("properties", {}).get("archivedAt")
+                    archived_at = company.get("archivedAt")
                     if archived_at:
                         # Parse ISO format timestamp
                         archived_ts = datetime.fromisoformat(archived_at.replace('Z', '+00:00'))
@@ -241,14 +241,20 @@ class HubSpotCacheSync:
         for company in companies:
             properties = company.get("properties", {})
             
-            # Parse create date
+            # Parse create date (handles both ms timestamp and ISO string)
             created_date = None
-            if properties.get("createdate"):
+            raw_date = properties.get("createdate")
+            if raw_date:
                 try:
-                    timestamp_ms = int(properties["createdate"])
+                    # Try millisecond timestamp first (from GET endpoint)
+                    timestamp_ms = int(raw_date)
                     created_date = datetime.fromtimestamp(timestamp_ms / 1000)
-                except:
-                    pass
+                except (ValueError, TypeError):
+                    try:
+                        # Fall back to ISO format (from Search API)
+                        created_date = datetime.fromisoformat(str(raw_date).replace('Z', '+00:00')).replace(tzinfo=None)
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Could not parse createdate '{raw_date}' for company {company.get('id')}: {e}")
             
             # Check if exists
             existing = self.session.query(HubSpotCache).filter_by(
