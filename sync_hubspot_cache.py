@@ -429,30 +429,46 @@ class HubSpotCacheSync:
         
         Called automatically after cache sync so that newly-added cache entries
         can match previously un-enrichable companies.
+        
+        Uses chunked queries to avoid memory exhaustion on small Render instances.
         """
         logger.info("Checking for un-enriched companies that now match cache...")
         
-        # Find companies with no active enrichment
-        unenriched = self.session.query(Company)\
+        # COUNT first — never load all into memory
+        unenriched_count = self.session.query(Company)\
             .outerjoin(HubSpotEnrichment,
                        (Company.id == HubSpotEnrichment.company_id) &
                        (HubSpotEnrichment.is_active == True))\
             .filter(HubSpotEnrichment.id == None)\
-            .all()
+            .count()
         
-        if not unenriched:
+        if unenriched_count == 0:
             logger.info("All companies already have active HubSpot enrichments")
             return 0
         
-        logger.info(f"Found {len(unenriched)} companies without active enrichments")
+        logger.info(f"Found {unenriched_count} companies without active enrichments")
         
         hubspot_client = HubSpotClientCached(session=self.session)
         
         total_created = 0
         batch_size = 100
+        batch_num = 0
         
-        for i in range(0, len(unenriched), batch_size):
-            batch = unenriched[i:i + batch_size]
+        # Process in chunks — re-query each batch to keep memory flat
+        while True:
+            batch = self.session.query(Company)\
+                .outerjoin(HubSpotEnrichment,
+                           (Company.id == HubSpotEnrichment.company_id) &
+                           (HubSpotEnrichment.is_active == True))\
+                .filter(HubSpotEnrichment.id == None)\
+                .order_by(Company.id)\
+                .limit(batch_size)\
+                .all()
+            
+            if not batch:
+                break
+            
+            batch_num += 1
             
             batch_data = []
             for company in batch:
@@ -466,6 +482,7 @@ class HubSpotCacheSync:
             
             enrichments = hubspot_client.batch_enrich_companies(batch_data)
             
+            batch_created = 0
             for company_id, enrichment_data in enrichments.items():
                 if enrichment_data:
                     company = next(c for c in batch if c.id == company_id)
@@ -479,12 +496,17 @@ class HubSpotCacheSync:
                         is_active=True
                     )
                     self.session.add(new_enrichment)
-                    total_created += 1
+                    batch_created += 1
             
+            total_created += batch_created
+            
+            # Commit and free memory after each batch
             self.session.commit()
-            logger.info(f"  Batch {i // batch_size + 1}: processed {len(batch)} companies")
+            self.session.expire_all()
+            
+            logger.info(f"  Batch {batch_num}: {batch_created} enrichments from {len(batch)} companies ({total_created} total)")
         
-        logger.info(f"✅ Auto-enrichment complete: {total_created} new enrichments created from {len(unenriched)} un-enriched companies")
+        logger.info(f"✅ Auto-enrichment complete: {total_created} new enrichments created from {unenriched_count} un-enriched companies")
         return total_created
 
     def sync(self):
