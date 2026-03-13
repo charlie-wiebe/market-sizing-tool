@@ -123,8 +123,8 @@ class HubSpotCacheSync:
                 if last_sync_timestamp:
                     archived_at = company.get("archivedAt")
                     if archived_at:
-                        # Parse ISO format timestamp
-                        archived_ts = datetime.fromisoformat(archived_at.replace('Z', '+00:00'))
+                        # Parse ISO format timestamp (strip tz to match naive last_sync_timestamp)
+                        archived_ts = datetime.fromisoformat(archived_at.replace('Z', '+00:00')).replace(tzinfo=None)
                         if archived_ts > last_sync_timestamp:
                             archived_companies.append(company["id"])
                 else:
